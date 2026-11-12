@@ -5,21 +5,34 @@ package com.zhuhuibin.hyperchange.lite.glass
 import android.content.Context
 import android.content.res.Resources
 import android.graphics.Point
+import android.view.ViewGroup
+import java.lang.ref.WeakReference
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.HookRuntime
-import java.lang.reflect.Method
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScopeToken
 import java.util.WeakHashMap
 
-internal class NotificationMaterial(private val runtime: HookRuntime, private val selected: () -> Boolean) {
+internal class NotificationMaterial(
+    private val runtime: HookRuntime,
+    private val permitted: (View) -> Boolean,
+    private val selected: (View) -> Boolean,
+) {
     private data class Recipe(val configuration: Int, val values: FloatArray)
     private val recipes = WeakHashMap<Resources, Recipe>()
     private val applying = ThreadLocal<Boolean>()
-    private val effectRoots = WeakHashMap<View, Pair<Any?, Method>>()
+    private val knownRoots = WeakHashMap<View, NotificationScopeToken>()
+    private val forcedRoots = WeakHashMap<View, MaterialOwnership>()
+    private class Pending(val job: Runnable, val scope: NotificationScopeToken)
+    private val pending = WeakHashMap<View, Pending>()
+    private val releases = MaterialReleaseLedger<View>()
+    private val generation = MaterialGeneration()
+    private val native = NativeMaterialRebind(runtime)
     private val effectPrefix = "com.android.systemui.statusbar.notification.style.vieweffect."
     private val installedLoaders = WeakHashMap<ClassLoader, Boolean>()
     private var firstFailureLogged = false
 
-    fun shouldUnify(view: View): Boolean = selected() && !GlassSurfaces.excluded(view) && !GlassSurfaces.headsUp(view) &&
+    fun shouldUnify(view: View): Boolean = permitted(view) && selected(view) && !GlassSurfaces.excluded(view) && !GlassSurfaces.headsUp(view) &&
         (GlassSurfaces.media(view) || GlassSurfaces.focus(view))
 
     fun normalRecipe(view: View): FloatArray? {
@@ -54,6 +67,7 @@ internal class NotificationMaterial(private val runtime: HookRuntime, private va
 
     fun installEffects(loader: ClassLoader) {
         if (installedLoaders.put(loader, true) != null) return
+        native.install(loader)
         val focus = listOf("FocusNotificationNormalEffect", "FocusNotificationNormalCustomBgEffect", "FocusNotificationBlurEffect", "FocusNotificationBlurOnKeyguardEffect", "FocusNotificationGlassEffect", "FocusNotificationGlassCustomBgEffect", "FocusNotificationGlassOnKeyguardEffect", "FocusNotificationGlassOnKeyguardLightWallPaperEffect", "FocusNotificationGlassFullAodEffect")
         val media = listOf("MediaViewNormalEffect", "MediaViewBlurEffect", "MediaViewBlurOnKeyguardEffect", "MediaViewGlassEffect", "MediaViewGlassOnKeyguardEffect", "MediaViewGlassOnKeyguardLightWallPaperEffect", "MediaViewGlassFullAodEffect")
         var found = 0
@@ -61,14 +75,18 @@ internal class NotificationMaterial(private val runtime: HookRuntime, private va
             val type = runCatching { loader.loadClass(effectPrefix + name) }.getOrNull() ?: return@forEach
             val method = type.declaredMethods.firstOrNull { it.name == "apply" && it.parameterCount == 2 && Context::class.java.isAssignableFrom(it.parameterTypes[1]) } ?: return@forEach
             runtime.hook(method, "lite-glass:effect:$name") { chain ->
+                val root = chain.getArg(0) as? View
+                // Mark before the OEM calls its setters: a detached FrameLayout is still
+                // media, and must not temporarily inherit ordinary-notification permission.
+                if (root != null && name in media) GlassSurfaces.markMediaRoot(root)
+                if (root != null) NotificationMaterialWrites.observe(root, permitted(root))
                 val result = chain.proceed()
-                if (applying.get() == true) return@hook result
-                val root = chain.getArg(0) as? View ?: return@hook result
-                synchronized(effectRoots) { effectRoots[root] = chain.thisObject to method }
+                if (root == null || applying.get() == true) return@hook result
+                synchronized(knownRoots) { knownRoots[root] = NotificationScope.token(root) }
                 if (shouldUnify(root)) {
                     applyNormal(root, loader, name in media)
-                    root.post { if (root.isAttachedToWindow && shouldUnify(root)) applyNormal(root, loader, name in media) }
-                }
+                    enqueue(root, { shouldUnify(root) }) { applyNormal(root, loader, name in media) }
+                } else synchronized(forcedRoots) { forcedRoots.remove(root) }
                 result
             }
             found++
@@ -85,30 +103,93 @@ internal class NotificationMaterial(private val runtime: HookRuntime, private va
         runtime.log("Native notification material effects installed: $found")
     }
 
-    /** Replay the last OEM effect on both enable and disable, then the setter engine reapplies tuning. */
-    fun refresh() {
-        val roots = synchronized(effectRoots) { effectRoots.toMap() }
-        roots.forEach { (view, call) ->
-            if (view.isAttachedToWindow) view.post {
-                runCatching { call.second.invoke(call.first, view, view.context) }.onFailure { logOnce("Could not refresh notification material", it) }
+    /** Invalidate late work, then let today's binder choose its keyguard/AOD/theme effect. */
+    fun refresh(sceneOnly: Boolean = false) {
+        if (!sceneOnly) generation.invalidate()
+        synchronized(pending) {
+            val stale = pending.filter { (view, task) -> !sceneOnly || !NotificationScope.isCurrent(view, task.scope) }
+            stale.forEach { (view, task) -> view.removeCallbacks(task.job); pending.remove(view) }
+        }
+        val previous = synchronized(forcedRoots) {
+            forcedRoots.filter { (view, ownership) -> !sceneOnly || !ownership.scopeCurrent(view) }
+        }
+        previous.forEach { (view, ownership) ->
+            val allowed = shouldUnify(view)
+            val stillOwned = ownership.stillOwned()
+            val transferred = if (!allowed && stillOwned) {
+                val reference = WeakReference(view)
+                requestRefresh(view, true) { reference.get()?.let { !shouldUnify(it) && ownership.stillOwned() } == true }
+            } else false
+            if (canForgetMaterialState(allowed, stillOwned, transferred)) synchronized(forcedRoots) {
+                if (forcedRoots[view] === ownership) forcedRoots.remove(view)
             }
+        }
+        val roots = synchronized(knownRoots) {
+            knownRoots.filter { (view, token) -> !sceneOnly || !NotificationScope.isCurrent(view, token) }.keys.toList().also {
+                it.forEach { view -> knownRoots[view] = NotificationScope.token(view) }
+            }
+        }
+        roots.filter(::shouldUnify).forEach { requestRefresh(it, false) }
+        // Cancellation of an old queue generation must not lose an unfinished release.
+        releases.snapshot().forEach { (view, guard) -> scheduleRelease(view, guard) }
+    }
+
+    fun requestRefresh(view: View, releasing: Boolean, ownership: () -> Boolean = { true }): Boolean {
+        val root = native.root(view) ?: return false
+        if (releasing) {
+            releases.offer(root, ownership)
+            scheduleRelease(root, ownership)
+            return true
+        }
+        enqueue(root, { ownership() && permitted(root) }) {
+            if (!native.refresh(root)) logOnce("Current notification binder unavailable; waiting for the next OEM material update", null)
+        }
+        return true
+    }
+
+    private fun scheduleRelease(root: View, guard: () -> Boolean) {
+        if (!guard()) { releases.discard(root, guard); return }
+        enqueue(root, { true }) {
+            // Remove only this delivery. A newer owner/setting can have supplied another.
+            if (releases.take(root, guard) && !native.refresh(root)) logOnce("Current notification release deferred to the next OEM update", null)
         }
     }
 
+    private fun enqueue(view: View, allowed: () -> Boolean, action: () -> Unit) {
+        val ticket = generation.value
+        val scene = NotificationScope.token(view)
+        lateinit var job: Runnable
+        job = Runnable {
+            synchronized(pending) { if (pending[view]?.job !== job) return@Runnable; pending.remove(view) }
+            runCatching {
+                if (view.isAttachedToWindow && generation.current(ticket, allowed() && NotificationScope.isCurrent(view, scene))) action()
+            }.onFailure { logOnce("Deferred notification material update cancelled", it) }
+        }
+        synchronized(pending) {
+            pending.remove(view)?.let { view.removeCallbacks(it.job) }
+            pending[view] = Pending(job, scene)
+        }
+        if (!view.post(job)) synchronized(pending) { if (pending[view]?.job === job) pending.remove(view) }
+    }
+
     private fun applyNormal(view: View, loader: ClassLoader, media: Boolean) {
-        if (applying.get() == true || GlassSurfaces.headsUp(view)) return
+        if (applying.get() == true || !shouldUnify(view)) return
+        val ticket = generation.value
+        val scene = NotificationScope.token(view)
         applying.set(true)
         try {
             val name = if (media) "MediaViewGlassEffect" else "NotificationRowGlassEffect"
             val type = loader.loadClass(effectPrefix + name)
             val singleton = type.declaredFields.firstOrNull { it.name == "INSTANCE" }?.apply { isAccessible = true }?.get(null) ?: return
             val apply = type.methods.firstOrNull { it.name == "apply" && it.parameterCount == 2 } ?: return
+            if (!generation.current(ticket, NotificationScope.isCurrent(view, scene) && shouldUnify(view))) return
             apply.invoke(singleton, view, view.context)
+            synchronized(forcedRoots) { forcedRoots[view] = MaterialOwnership(view) }
         } catch (error: Throwable) { logOnce("Could not apply normal notification material", error) }
         finally { applying.remove() }
     }
 
-    private fun logOnce(message: String, error: Throwable) {
+    private fun logOnce(message: String, error: Throwable?) {
         if (!firstFailureLogged) { firstFailureLogged = true; runtime.log(message, error) }
     }
 
@@ -121,4 +202,35 @@ internal class NotificationMaterial(private val runtime: HookRuntime, private va
         }
         return null
     }
+}
+
+/** A replacement background or a new transition alpha means this module must yield. */
+private class MaterialOwnership(root: View) {
+    private val ticket = NotificationMaterialWrites.ticket(root)
+    private val scope = NotificationScope.token(root)
+    fun scopeCurrent(view: View): Boolean = NotificationScope.isCurrent(view, scope)
+    private class Property(view: View) {
+        val reference = WeakReference(view)
+        val background = WeakReference(view.background)
+        val hadBackground = view.background != null
+        val alpha = view.alpha
+        val children = (view as? ViewGroup)?.let { group ->
+            (0 until group.childCount).map { WeakReference(group.getChildAt(it)) }
+        }
+        fun unchanged(): Boolean = reference.get()?.let {
+            (if (hadBackground) background.get() != null && background.get() === it.background else it.background == null) &&
+                it.alpha == alpha && (if (it is ViewGroup) children?.let { saved ->
+                    it.childCount == saved.size && saved.indices.all { index -> saved[index].get() === it.getChildAt(index) }
+                } == true else children == null)
+        } == true
+    }
+    private val properties = buildList {
+        fun visit(view: View, depth: Int) {
+            if (depth > 12 || size >= 128) return
+            add(Property(view))
+            if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index), depth + 1)
+        }
+        visit(root, 0)
+    }
+    fun stillOwned(): Boolean = NotificationMaterialWrites.current(ticket) && properties.all { it.unchanged() }
 }

@@ -3,6 +3,7 @@
 package com.zhuhuibin.hyperchange.lite.glass
 
 import android.content.SharedPreferences
+import com.zhuhuibin.hyperchange.lite.SettingsMigration
 import kotlin.math.roundToInt
 
 internal fun readSoftGlassSettings(p: SharedPreferences): SoftGlassSettings = SoftGlassSettings(
@@ -22,6 +23,7 @@ internal fun SharedPreferences.number(key: String, fallback: Float): Float =
 internal data class GlassRuntimeSettings(
     val glass: SoftGlassSettings,
     val notifications: Boolean,
+    val media: Boolean,
     val controlCenter: Boolean,
     val volume: Boolean,
     val shade: Boolean,
@@ -33,6 +35,7 @@ internal data class GlassRuntimeSettings(
     companion object {
         fun read(p: SharedPreferences) = GlassRuntimeSettings(
             readSoftGlassSettings(p), p.getBoolean("glass_notifications", true),
+            SettingsMigration.resolve(p.all)[SettingsMigration.MEDIA_KEY] as Boolean,
             p.getBoolean("glass_control_center", true), p.getBoolean("glass_volume", true),
             p.getBoolean("glass_shade", true), p.getBoolean("glass_unify_notifications", false),
             p.getBoolean("glass_assistant", false), p.getBoolean("glass_sidebar", false),

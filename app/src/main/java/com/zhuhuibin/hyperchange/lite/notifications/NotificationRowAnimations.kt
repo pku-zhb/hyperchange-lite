@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.HookRuntime
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
+import com.zhuhuibin.hyperchange.lite.scope.NotificationRole
 import java.lang.reflect.Method
 import java.util.WeakHashMap
 
@@ -24,6 +26,7 @@ internal class NotificationRowAnimations {
     private lateinit var opacity: Any
     private lateinit var setValue: Method
     private lateinit var getValue: Method
+    @Volatile private var configurationRevision = 0L
     private var listener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     fun install(runtime: HookRuntime) {
@@ -42,8 +45,10 @@ internal class NotificationRowAnimations {
         injector.declaredMethods.filter { it.name == "performAddAnimation" && it.parameterCount == 3 && it.parameterTypes[2] == Boolean::class.javaPrimitiveType }
             .forEach { method -> runtime.hook(method, "notification-motion:add") { chain ->
                 val view = runCatching { chain.thisObject?.read("view") as? View }.getOrNull()
-                if (!prefs.flag("notification_stack_anim_enabled") || view == null || !row.isInstance(view) ||
-                    chain.getArg(2) == true || view.call("isHeadsUpState") == true) chain.proceed()
+                if (view == null || !eligible(view) || !row.isInstance(view) ||
+                    chain.getArg(2) == true || view.call("isHeadsUpState") == true) {
+                    view?.let { sessions.remove(it)?.finish(true) }; chain.proceed()
+                }
                 else if (runCatching { start(view, true, null, null, null) }.onFailure {
                     runtime.log("Notification add animation unavailable; native animation kept", it)
                 }.isFailure) chain.proceed() else null
@@ -52,8 +57,10 @@ internal class NotificationRowAnimations {
             it.parameterTypes[4] == Runnable::class.java && it.parameterTypes[5] == Runnable::class.java }
             .forEach { method -> runtime.hook(method, "notification-motion:remove") { chain ->
                 val view = chain.thisObject as? View
-                if (!prefs.flag("notification_stack_anim_enabled") || view == null || chain.getArg(2) == true ||
-                    view.call("isHeadsUpState") == true) chain.proceed()
+                if (view == null || !eligible(view) || chain.getArg(2) == true ||
+                    view.call("isHeadsUpState") == true) {
+                    view?.let { sessions.remove(it)?.finish(true) }; chain.proceed()
+                }
                 else {
                     val success = runCatching {
                         start(view, false, chain.getArg(4) as? Runnable, chain.getArg(5) as? Runnable,
@@ -63,16 +70,26 @@ internal class NotificationRowAnimations {
                 }
             } }
         listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == "notification_stack_anim_enabled") Handler(Looper.getMainLooper()).post {
-                if (!prefs.flag("notification_stack_anim_enabled")) sessions.values.toList().forEach { it.finish(true) }
+            if (key == null || key == "notification_stack_anim_enabled") {
+                configurationRevision++
+                Handler(Looper.getMainLooper()).post {
+                    sessions.values.toList().filter { it.stale() }.forEach { it.finish(true) }
+                }
             }
         }.also(prefs::registerOnSharedPreferenceChangeListener)
+        NotificationScope.addListener { sessions.values.toList().filter { it.stale() }.forEach { it.finish(true) } }
     }
+
+    private fun eligible(view: View): Boolean = prefs.flag("notification_stack_anim_enabled") &&
+        NotificationScope.role(view) == NotificationRole.ORDINARY && NotificationScope.sceneAllows(view)
 
     private fun write(view: View, scale: Float, alpha: Float) {
         setValue.invoke(scaleX, view, scale)
+        sessions[view]?.record(0, scale)
         setValue.invoke(scaleY, view, scale)
+        sessions[view]?.record(1, scale)
         setValue.invoke(opacity, view, alpha.coerceIn(0f, 1f))
+        sessions[view]?.record(2, alpha.coerceIn(0f, 1f))
     }
 
     private fun start(view: View, adding: Boolean, onStart: Runnable?, onEnd: Runnable?, listener: AnimatorListenerAdapter?) {
@@ -95,6 +112,7 @@ internal class NotificationRowAnimations {
                 this.duration = duration
                 setInterpolator { NotificationMotion.spring(it, damping, frequency) }
                 addUpdateListener {
+                    if (!session.valid()) { session.finish(true); return@addUpdateListener }
                     val p = it.animatedValue as Float
                     val amount = if (adding) 1f - p else p
                     runCatching {
@@ -104,9 +122,7 @@ internal class NotificationRowAnimations {
                 }
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationStart(animation: Animator) {
-                        session.committed = true
-                        runCatching { onStart?.run() }
-                        runCatching { listener?.onAnimationStart(animation) }
+                        session.startCallbacks(animation, onStart)
                     }
                     override fun onAnimationEnd(animation: Animator) { session.finish(false) }
                 })
@@ -124,13 +140,24 @@ internal class NotificationRowAnimations {
 
     private inner class Session(private val view: View, private val baseline: FloatArray, onEnd: Runnable?, private val external: AnimatorListenerAdapter?) : View.OnAttachStateChangeListener {
         val blur = SurfaceBlur(view) { runtime.log(it) }
+        private val token = NotificationScope.token(view)
+        private val revision = configurationRevision
+        private val owned = baseline.map { OwnedValue(it) }
+        private var finished = false
+        fun record(index: Int, value: Float) { owned[index].record(value) }
+        fun stale() = revision != configurationRevision || !NotificationScope.isCurrent(view, token)
+        fun valid() = !finished && eligible(view) && !finished && !stale()
         var committed = false
         var animator: ValueAnimator? = null
         private val completion = Completion {
             sessions.remove(view, this)
             view.removeOnAttachStateChangeListener(this)
             arrayOf(scaleX, scaleY, opacity).forEachIndexed { index, property ->
-                runCatching { setValue.invoke(property, view, if (committed) 1f else baseline[index]) }
+                runCatching {
+                    if (committed) owned[index].rebase(1f)
+                    val current = (getValue.invoke(property, view) as Number).toFloat()
+                    owned[index].release(current) { setValue.invoke(property, view, it) }
+                }
             }
             runCatching { blur.restore() }
             if (committed) {
@@ -138,8 +165,15 @@ internal class NotificationRowAnimations {
                 runCatching { animator?.let { external?.onAnimationEnd(it) } }
             }
         }
+        fun startCallbacks(animation: Animator, onStart: Runnable?) = completion.defer {
+            committed = true
+            runCatching { onStart?.run() }
+            runCatching { external?.onAnimationStart(animation) }
+        }
         fun finish(cancel: Boolean) {
-            if (cancel) { animator?.removeAllListeners(); animator?.cancel() }
+            if (finished) return
+            finished = true
+            if (cancel) { animator?.removeAllUpdateListeners(); animator?.removeAllListeners(); animator?.cancel() }
             completion.finish()
         }
         override fun onViewAttachedToWindow(v: View) = Unit
@@ -156,7 +190,7 @@ internal class SurfaceBlur(private val view: View, private val log: (String) -> 
         value as? RenderEffect
     }
     private val original = capture.getOrNull()
-    private var wrote = false
+    private val owned = OwnedValue(original)
     private var last = Float.NaN
     fun apply(radius: Float) {
         if (capture.isFailure) {
@@ -167,9 +201,16 @@ internal class SurfaceBlur(private val view: View, private val log: (String) -> 
         if (last == rounded) return
         last = rounded
         val blur = if (rounded > 0f) RenderEffect.createBlurEffect(rounded, rounded, Shader.TileMode.CLAMP) else null
-        view.setRenderEffect(if (blur != null && original != null) RenderEffect.createChainEffect(blur, original) else blur ?: original)
-        wrote = true
+        val effect = if (blur != null && original != null) RenderEffect.createChainEffect(blur, original) else blur ?: original
+        view.setRenderEffect(effect)
+        owned.record(effect)
     }
-    fun restore() { if (wrote) view.setRenderEffect(original); wrote = false; last = Float.NaN }
+    fun restore() {
+        if (capture.isSuccess) runCatching {
+            val current = view.javaClass.methodOrNull("getRenderEffect")?.invoke(view) as? RenderEffect
+            owned.release(current) { view.setRenderEffect(it) }
+        }
+        last = Float.NaN
+    }
     companion object { private val warned = java.util.concurrent.atomic.AtomicBoolean() }
 }

@@ -3,6 +3,7 @@
 package com.zhuhuibin.hyperchange.lite.glass
 
 import android.view.View
+import java.util.WeakHashMap
 
 internal enum class GlassSurface { NOTIFICATION, CONTROL_CENTER, VOLUME, SHADE }
 
@@ -10,6 +11,7 @@ internal object GlassSurfaces {
     private val shadeIds = setOf("shade_background", "notification_panel_background", "control_center_background")
     private val volumeIds = setOf("blur_frame", "volume_column_slider", "volume_column_slider_bg_glass", "volume_column_slider_bg_blend")
     private val mediaIds = setOf("media_bg", "media_background", "media_card_background")
+    private val mediaRoots = WeakHashMap<View, Boolean>()
 
     fun id(view: View): String = if (view.id == View.NO_ID || view.id == 0) "" else
         runCatching { view.resources.getResourceEntryName(view.id) }.getOrDefault("")
@@ -31,6 +33,9 @@ internal object GlassSurfaces {
         if (excluded(view)) return null
         val name = view.javaClass.name
         val resource = id(view)
+        // The OEM effect can write the header/root as well as its background. Determine
+        // media first so none of those setters can fall into the ordinary range.
+        if (media(view)) return GlassSurface.NOTIFICATION
         if (name.contains("NotificationBackgroundView") || (resource in mediaIds && media(view))) return GlassSurface.NOTIFICATION
         if (resource in shadeIds || name.contains("ShadeBackground") || name.contains("NotificationPanelBackground") || name.contains("ControlCenterBackground")) return GlassSurface.SHADE
         if (lineage(view).any { candidate ->
@@ -46,10 +51,33 @@ internal object GlassSurfaces {
 
     fun isShadeWindow(view: View): Boolean = view.javaClass.name == "com.android.systemui.shade.NotificationShadeWindowView"
 
-    fun media(view: View): Boolean = lineage(view).any {
-        val name = it.javaClass.name
-        name.startsWith("com.android.systemui.") &&
-            (name.contains("mediacontrol", true) || name.contains("mediaheader", true) || name.contains("miuimedia", true) || name.contains("mediarow", true))
+    /** Effect entry supplies identity for an OEM plain FrameLayout before attachment. */
+    fun markMediaRoot(view: View) {
+        if (!excluded(view) && !controlCenter(view)) synchronized(mediaRoots) { mediaRoots[view] = true }
+    }
+
+    fun materialRoot(view: View): View = if (media(view)) {
+        lineage(view).firstOrNull { it.javaClass.name.endsWith(".MiuiMediaHeaderView") } ?: lineage(view).firstOrNull {
+            synchronized(mediaRoots) { mediaRoots.containsKey(it) }
+        } ?: view
+    } else row(view) ?: view
+
+    fun media(view: View): Boolean {
+        if (controlCenter(view)) return false
+        return lineage(view).any {
+            synchronized(mediaRoots) { mediaRoots.containsKey(it) } || mediaOwner(it.javaClass.name)
+        }
+    }
+
+    internal fun mediaOwner(name: String): Boolean =
+        name.startsWith("com.android.systemui.statusbar.notification.mediacontrol.") ||
+            (name.startsWith("com.android.systemui.") &&
+                (name.contains("mediaheader", true) || name.contains("miuimedia", true) || name.contains("mediarow", true)) &&
+                !name.contains("mediaisland", true) && !name.contains("controlcenter", true))
+
+    private fun controlCenter(view: View): Boolean = lineage(view).any {
+        it.javaClass.name.startsWith("miui.systemui.controlcenter.") ||
+            it.javaClass.name.startsWith("com.miui.systemui.controlcenter.")
     }
 
     fun row(view: View): View? = lineage(view).firstOrNull { it.javaClass.name.contains("ExpandableNotificationRow") }
@@ -66,4 +94,13 @@ internal object GlassSurfaces {
             injector.javaClass.getMethod("isFocusNotification").invoke(injector) == true
         }.getOrDefault(false)
     } ?: false
+}
+
+/** Shared observation clock for native setters and complete OEM effect applications. */
+internal object NotificationMaterialWrites {
+    private val clock = MaterialWriteClock<View>()
+    fun touch(view: View) { clock.touch(GlassSurfaces.materialRoot(view)) }
+    fun observe(view: View, permitted: Boolean) { clock.observe(GlassSurfaces.materialRoot(view), permitted) }
+    fun ticket(view: View): MaterialWriteClock.Ticket<View> = clock.ticket(GlassSurfaces.materialRoot(view))
+    fun current(ticket: MaterialWriteClock.Ticket<View>): Boolean = clock.current(ticket)
 }

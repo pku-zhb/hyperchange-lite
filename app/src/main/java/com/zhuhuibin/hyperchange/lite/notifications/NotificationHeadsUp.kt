@@ -10,6 +10,7 @@ import android.os.Looper
 import android.util.SparseArray
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.HookRuntime
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
 import java.lang.reflect.Method
 import java.util.WeakHashMap
 
@@ -17,6 +18,7 @@ internal class NotificationHeadsUp {
     private val sessions = WeakHashMap<View, Session>()
     private lateinit var prefs: SharedPreferences
     private lateinit var runtime: HookRuntime
+    @Volatile private var configurationRevision = 0L
     private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     fun install(runtime: HookRuntime) {
@@ -41,15 +43,19 @@ internal class NotificationHeadsUp {
                 result
             } }
         preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == "notification_heads_up_pop_enabled") Handler(Looper.getMainLooper()).post {
-                if (!prefs.flag("notification_heads_up_pop_enabled")) sessions.values.toList().forEach { it.finish(true) }
+            if (key == null || key == "notification_heads_up_pop_enabled") {
+                configurationRevision++
+                Handler(Looper.getMainLooper()).post {
+                    sessions.values.toList().filter { it.stale() }.forEach { it.finish(true) }
+                }
             }
         }.also(prefs::registerOnSharedPreferenceChangeListener)
+        NotificationScope.addListener { sessions.values.toList().filter { it.stale() }.forEach { it.finish(true) } }
     }
 
     private fun start(view: View, entering: Boolean) {
-        val channel = Channel(view) // Resolve every required OEM member before writing anything.
         sessions.remove(view)?.finish(true)
+        val channel = Channel(view) // Resolve every required OEM member before writing anything.
         val session = Session(view, channel)
         sessions[view] = session
         view.addOnAttachStateChangeListener(session)
@@ -78,6 +84,7 @@ internal class NotificationHeadsUp {
                 }
             }
             addUpdateListener {
+                if (!session.valid()) { session.finish(true); return@addUpdateListener }
                 val fraction = it.animatedValue as Float
                 runCatching { update(if (entering) 1f - fraction else fraction) }
                     .onFailure { session.finish(true) }
@@ -102,22 +109,48 @@ internal class NotificationHeadsUp {
         private val update = requireNotNull(updateOwner.javaClass.methodOrNull("scheduleUpdateProperties"))
         private val listener = requireNotNull(injector.read("folmeStateListener"))
         private val complete = requireNotNull(listener.javaClass.methodOrNull("onComplete", Int::class.javaPrimitiveType!!))
-        fun scale(value: Float) { x.invoke(injector, view, value, 11071); y.invoke(injector, view, value, 11071) }
+        private fun data(): Any? = (values.get(injector) as? SparseArray<*>)?.get(11071)
+        private fun read(name: String, fallback: Float): Float {
+            val data = data() ?: return fallback
+            return requireNotNull(data.javaClass.fieldOrNull(name)).getFloat(data)
+        }
+        private val ownedX = OwnedValue(read("scaleX", 1f))
+        private val ownedY = OwnedValue(read("scaleY", 1f))
+        private val ownedRotation = OwnedValue(read("rotationX", 0f))
+        fun scale(value: Float) {
+            x.invoke(injector, view, value, 11071); ownedX.record(value)
+            y.invoke(injector, view, value, 11071); ownedY.record(value)
+        }
         fun rotation(value: Float) {
-            val data = (values.get(injector) as? SparseArray<*>)?.get(11071) ?: return
-            data.javaClass.fieldOrNull("rotationX")?.setFloat(data, value)
+            val data = data() ?: return
+            requireNotNull(data.javaClass.fieldOrNull("rotationX")).setFloat(data, value)
+            ownedRotation.record(value)
             update.invoke(updateOwner)
         }
         fun finish(notifyNative: Boolean) {
-            scale(1f); rotation(0f)
+            val currentX = read("scaleX", 1f)
+            val currentY = read("scaleY", 1f)
+            val currentRotation = read("rotationX", 0f)
+            val stillOwned = ownedX.owns(currentX) && ownedY.owns(currentY) && ownedRotation.owns(currentRotation)
+            ownedX.release(currentX) { x.invoke(injector, view, it, 11071) }
+            ownedY.release(currentY) { y.invoke(injector, view, it, 11071) }
+            ownedRotation.release(currentRotation) { value ->
+                data()?.let { requireNotNull(it.javaClass.fieldOrNull("rotationX")).setFloat(it, value) }
+                update.invoke(updateOwner)
+            }
             // Cancelling an overlay is not completion of the new native heads-up event.
-            if (notifyNative) complete.invoke(listener, 11071)
+            if (notifyNative && stillOwned) complete.invoke(listener, 11071)
         }
     }
 
     private inner class Session(private val view: View, private val channel: Channel) : View.OnAttachStateChangeListener {
         val animators = mutableListOf<ValueAnimator>()
         val blur = SurfaceBlur(view) { runtime.log(it) }
+        private val token = NotificationScope.token(view, ordinaryScene = false)
+        private val revision = configurationRevision
+        private var finished = false
+        fun stale() = revision != configurationRevision || !NotificationScope.isCurrent(view, token, ordinaryScene = false)
+        fun valid() = !finished && !stale() && prefs.flag("notification_heads_up_pop_enabled")
         private var outstanding = 3
         private var cancelled = false
         private val completion = Completion {
@@ -128,7 +161,9 @@ internal class NotificationHeadsUp {
         }
         fun ended() { if (--outstanding == 0) finish(false) }
         fun finish(cancel: Boolean) {
-            if (cancel) { cancelled = true; animators.forEach { it.removeAllListeners(); it.cancel() } }
+            if (finished) return
+            finished = true
+            if (cancel) { cancelled = true; animators.forEach { it.removeAllUpdateListeners(); it.removeAllListeners(); it.cancel() } }
             completion.finish()
         }
         override fun onViewAttachedToWindow(v: View) = Unit

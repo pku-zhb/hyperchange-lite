@@ -59,8 +59,16 @@ object NotificationMotion {
 /** Completion callbacks remain exactly-once across animation end, cancel and detach. */
 internal class Completion(private val action: () -> Unit) {
     private var completed = false
+    private var deferred = 0
+    private var requested = false
+    fun defer(block: () -> Unit) {
+        deferred++
+        try { block() }
+        finally { if (--deferred == 0 && requested) finish() }
+    }
     fun finish() {
         if (completed) return
+        if (deferred > 0) { requested = true; return }
         completed = true
         action()
     }
