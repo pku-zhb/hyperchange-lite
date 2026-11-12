@@ -10,8 +10,8 @@ android {
         applicationId = "com.zhuhuibin.hyperchange.lite"
         minSdk = 35
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.1.0-preview4"
+        versionCode = 5
+        versionName = "0.1.0-preview5"
     }
     buildTypes {
         release {

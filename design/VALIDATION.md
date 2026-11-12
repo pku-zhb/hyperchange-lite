@@ -141,3 +141,11 @@ The interactive preview shares material tuning and motion functions, with an
 explicit fallback when native OEM glass is unavailable. Notification animation
 blur has a further baseline-restoration guard described in [RECOVERY.md](RECOVERY.md).
 Ownership candidates remain separate in [DEFERRED.md](DEFERRED.md).
+
+## Preview 5 performance candidate
+
+Preview 5 preserves Preview 4 presets and addresses material classification CPU
+cost. All 96 tests in 18 suites passed; Debug, R8 Release and vital lint passed.
+See [AOD performance](AOD_PERFORMANCE.md). The paired candidate is HMC Preview 17
+with Lite Preview 5; post-install performance comparison remains pending. The
+material-editor UI worktree is intentionally excluded from this functional build.
