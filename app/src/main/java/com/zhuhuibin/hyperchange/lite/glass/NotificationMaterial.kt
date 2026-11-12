@@ -16,6 +16,7 @@ import java.util.WeakHashMap
 internal class NotificationMaterial(
     private val runtime: HookRuntime,
     private val permitted: (View) -> Boolean,
+    private val tuning: () -> Boolean,
     private val selected: (View) -> Boolean,
 ) {
     private data class Recipe(val configuration: Int, val values: FloatArray)
@@ -25,6 +26,7 @@ internal class NotificationMaterial(
     private val forcedRoots = WeakHashMap<View, MaterialOwnership>()
     private class Pending(val job: Runnable, val scope: NotificationScopeToken)
     private val pending = WeakHashMap<View, Pending>()
+    private val refreshedRoots = NativeMaterialRefreshes<View, NotificationScopeToken>()
     private val releases = MaterialReleaseLedger<View>()
     private val generation = MaterialGeneration()
     private val native = NativeMaterialRebind(runtime)
@@ -34,6 +36,9 @@ internal class NotificationMaterial(
 
     fun shouldUnify(view: View): Boolean = permitted(view) && selected(view) && !GlassSurfaces.excluded(view) && !GlassSurfaces.headsUp(view) &&
         (GlassSurfaces.media(view) || GlassSurfaces.focus(view))
+
+    private fun active(view: View): Boolean = !GlassSurfaces.excluded(view) && permitted(view) &&
+        (tuning() || shouldUnify(view))
 
     fun normalRecipe(view: View): FloatArray? {
         val resource = runCatching {
@@ -124,12 +129,20 @@ internal class NotificationMaterial(
                 if (forcedRoots[view] === ownership) forcedRoots.remove(view)
             }
         }
+        // The OEM binder has seen ordinary rows and media even while our tuning
+        // was off. Re-enter its current selector on first enable as well; there
+        // may be no setter baseline or focus/media effect callback to replay.
+        val candidates = (synchronized(knownRoots) { knownRoots.keys.toList() } + native.roots())
+            .mapNotNull(native::root).distinct()
         val roots = synchronized(knownRoots) {
-            knownRoots.filter { (view, token) -> !sceneOnly || !NotificationScope.isCurrent(view, token) }.keys.toList().also {
+            candidates.filter { view ->
+                val token = knownRoots[view]
+                !sceneOnly || token == null || !NotificationScope.isCurrent(view, token)
+            }.also {
                 it.forEach { view -> knownRoots[view] = NotificationScope.token(view) }
             }
         }
-        roots.filter(::shouldUnify).forEach { requestRefresh(it, false) }
+        roots.filter(::active).forEach { requestRefresh(it, false) }
         // Cancellation of an old queue generation must not lose an unfinished release.
         releases.snapshot().forEach { (view, guard) -> scheduleRelease(view, guard) }
     }
@@ -141,8 +154,9 @@ internal class NotificationMaterial(
             scheduleRelease(root, ownership)
             return true
         }
-        enqueue(root, { ownership() && permitted(root) }) {
-            if (!native.refresh(root)) logOnce("Current notification binder unavailable; waiting for the next OEM material update", null)
+        if (!active(root)) return false
+        enqueue(root, { ownership() && active(root) }) {
+            if (!refreshNative(root)) logOnce("Current notification binder unavailable; waiting for the next OEM material update", null)
         }
         return true
     }
@@ -151,8 +165,16 @@ internal class NotificationMaterial(
         if (!guard()) { releases.discard(root, guard); return }
         enqueue(root, { true }) {
             // Remove only this delivery. A newer owner/setting can have supplied another.
-            if (releases.take(root, guard) && !native.refresh(root)) logOnce("Current notification release deferred to the next OEM update", null)
+            if (releases.take(root, guard) && !refreshNative(root)) logOnce("Current notification release deferred to the next OEM update", null)
         }
+    }
+
+    /** Both effect discovery and delayed setter refresh can request this same root. */
+    private fun refreshNative(root: View): Boolean {
+        val stamp = refreshedRoots.claim(root, generation.value, NotificationScope.token(root)) ?: return true
+        var requested = false
+        return try { native.refresh(root).also { requested = it } }
+        finally { if (!requested) refreshedRoots.failed(root, stamp) }
     }
 
     private fun enqueue(view: View, allowed: () -> Boolean, action: () -> Unit) {
@@ -201,6 +223,23 @@ internal class NotificationMaterial(
             type = type.superclass
         }
         return null
+    }
+}
+
+/** First enable needs no old setter baseline; duplicate entry paths share one request. */
+internal class NativeMaterialRefreshes<K : Any, S> {
+    data class Stamp<S>(val configuration: Long, val scene: S)
+    private val requests = WeakHashMap<K, Stamp<S>>()
+
+    @Synchronized fun claim(root: K, configuration: Long, scene: S): Stamp<S>? {
+        val stamp = Stamp(configuration, scene)
+        if (requests[root] == stamp) return null
+        requests[root] = stamp
+        return stamp
+    }
+
+    @Synchronized fun failed(root: K, stamp: Stamp<S>) {
+        if (requests[root] == stamp) requests.remove(root)
     }
 }
 

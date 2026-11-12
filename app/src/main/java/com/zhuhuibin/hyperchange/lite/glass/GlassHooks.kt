@@ -30,7 +30,7 @@ private class SystemGlass(private val runtime: HookRuntime) {
     )
     private fun notificationRange(view: android.view.View): Boolean =
         notificationPolicy().range(GlassSurfaces.media(view), NotificationScope.sceneAllows(view))
-    private val normal = NotificationMaterial(runtime, ::notificationRange) { view ->
+    private val normal = NotificationMaterial(runtime, ::notificationRange, { state.glass.enabled }) { view ->
         notificationPolicy().force(GlassSurfaces.media(view), NotificationScope.sceneAllows(view),
             NotificationScope.role(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
     }
@@ -56,8 +56,10 @@ private class SystemGlass(private val runtime: HookRuntime) {
         }, nativeNotificationRefresh = normal::requestRefresh)
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key.startsWith("glass_")) {
-            state = GlassRuntimeSettings.read(runtime.preferences)
-            refresh()
+            val next = GlassRuntimeSettings.read(runtime.preferences)
+            // One atomic preset edit can notify several keys with the same full
+            // snapshot. Recompute each current root once for that actual change.
+            if (next != state) { state = next; refresh() }
         }
     }
     fun install() {

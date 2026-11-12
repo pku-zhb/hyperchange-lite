@@ -53,6 +53,10 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
 
     fun root(view: View): View? = if (GlassSurfaces.media(view)) GlassSurfaces.materialRoot(view) else GlassSurfaces.row(view)
 
+    /** Bindings exist even when tuning was disabled and no setter baseline was kept. */
+    fun roots(): List<View> = (synchronized(rows) { rows.keys.toList() } +
+        synchronized(mediaInteractors) { mediaInteractors.filterValues { it.get() != null }.keys.toList() }).distinct()
+
     fun refresh(view: View): Boolean {
         if (!view.isAttachedToWindow || refreshing.get() == true) return false
         if (GlassSurfaces.media(view)) return refreshMedia(view)

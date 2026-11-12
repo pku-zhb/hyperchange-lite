@@ -36,6 +36,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
     var scene: Scene = Scene.NOTIFICATION
         private set
+    /** API configuration status only; this does not verify the SystemUI hooks. */
+    var nativeMaterialActive: Boolean? = null
+        private set
+    var onMaterialStatusChanged: ((Boolean) -> Unit)? = null
     private val wallpaper = WallpaperView(context)
     private val content = FrameLayout(context)
     private val caption = TextView(context)
@@ -45,6 +49,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private val handler = Handler(Looper.getMainLooper())
     private var mainCard: SampleSurface? = null
     private var night = false
+    private var materialComparison = false
     private var expanded = false
     private var removed = false
     private var focusGroup = ""
@@ -193,6 +198,13 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         if (surfaces.isNotEmpty()) buildScene()
     }
 
+    /** Preset A/B respects the saved master switch; other previews show the parameters. */
+    fun setMaterialComparison(value: Boolean) {
+        if (materialComparison == value) return
+        materialComparison = value
+        refresh()
+    }
+
     fun setWallpaperStyle(style: Int) {
         imageGeneration++
         wallpaper.setImage(null)
@@ -255,6 +267,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
 
     private fun buildScene() {
         cancelAnimations()
+        nativeMaterialActive = null
+        surfaces.forEach { material.clear(it) }
         content.removeAllViews()
         surfaces.clear()
         mainCard = null
@@ -608,8 +622,17 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
 
     private fun updateCaption() {
-        val native = surfaces.isNotEmpty() && surfaces.all { it.nativeApplied }
-        val materialLabel = if (native) "原生材质接口" else "材质示意"
+        val ready = surfaces.isNotEmpty() && surfaces.all { it.width > 0 && it.height > 0 }
+        val native = surfaces.all { it.nativeApplied }
+        if (ready && nativeMaterialActive != native) {
+            nativeMaterialActive = native
+            onMaterialStatusChanged?.invoke(native)
+        }
+        val materialLabel = when {
+            !ready -> "正在准备材质"
+            native -> "原生接口已调用"
+            else -> "示意预览，非原生材质"
+        }
         val action = when (scene) {
             Scene.NOTIFICATION -> if (focusGroup.contains("显隐")) "轻点查看显隐" else "轻点展开 · 按住拖动"
             Scene.HEADS_UP -> "轻点重播弹出"
@@ -617,11 +640,16 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             Scene.VOLUME -> "按住拖动 · 松开回弹"
             else -> "实时调参"
         }
-        caption.text = "$materialLabel · 本地交互示意\n$action，不启用系统功能"
+        val label = "$materialLabel · 本地交互示意\n$action，不启用系统功能"
+        if (caption.text.toString() != label) caption.text = label
     }
 
     override fun onDetachedFromWindow() { cancelAnimations(); super.onDetachedFromWindow() }
-    fun release() { released = true; imageGeneration++; cancelAnimations(); wallpaper.setImage(null) }
+    fun release() {
+        released = true; imageGeneration++; cancelAnimations(); wallpaper.setImage(null)
+        onMaterialStatusChanged = null
+        surfaces.forEach { material.clear(it) }
+    }
     private fun number(key: String, default: Float) = (preferences.all[key] as? Number)?.toFloat() ?: default
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
     private fun dp(value: Float) = value * resources.displayMetrics.density
@@ -640,13 +668,17 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         fun updateMaterial() {
             radius = dp(number(radiusKey, if (scene == Scene.VOLUME) 40f else 26f)).coerceAtLeast(0f)
             invalidateOutline()
-            nativeApplied = material.apply(this, preferences)
-            val opacity = number("glass_background_opacity", 100f) / 100f
+            nativeApplied = material.apply(this, preferences, respectEnabled = materialComparison)
+            val opacity = if (materialComparison && !preferences.getBoolean("glass_enabled", false)) 1f
+                else number("glass_background_opacity", 100f) / 100f
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
                 if (night) Color.argb(((if (nativeApplied) 20 else 166) * opacity).roundToInt().coerceIn(0, 240), 26, 37, 51)
                 else Color.argb(((if (nativeApplied) 22 else 185) * opacity).roundToInt().coerceIn(0, 240), 255, 255, 255),
                 if (night) 0x442b3547 else 0x66ffffff,
             )).apply { cornerRadius = radius; setStroke(dp(1), if (night) 0x28ffffff else 0x80ffffff.toInt()) }
+            // Layout can finish after the Compose update that requested the sample.
+            // Publish the actual configured result rather than leaving its label stale.
+            updateCaption()
         }
     }
 
@@ -665,6 +697,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 matrix.postTranslate((width - bitmap.width * scale) * .5f, (height - bitmap.height * scale) * .5f)
                 paint.shader = null
                 canvas.drawBitmap(bitmap, matrix, paint)
+            } else if (style == 3) {
+                drawContrastChart(canvas)
             } else {
                 val colors = when (style) {
                     1 -> intArrayOf(0xff594173.toInt(), 0xffc47a87.toInt(), 0xffe4b898.toInt())
@@ -684,6 +718,34 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 canvas.drawPath(path, paint)
             }
             if (night) { paint.shader = null; paint.color = 0x55091020; canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint) }
+        }
+
+        private fun drawContrastChart(canvas: Canvas) {
+            paint.shader = null
+            val cell = 24f * resources.displayMetrics.density
+            val colors = intArrayOf(0xff17283e.toInt(), 0xffedf4ed.toInt())
+            val columns = (width / cell).toInt() + 1
+            val rows = (height / cell).toInt() + 1
+            for (row in 0 until rows) for (column in 0 until columns) {
+                paint.color = colors[(row + column) and 1]
+                canvas.drawRect(column * cell, row * cell, (column + 1) * cell, (row + 1) * cell, paint)
+            }
+            // Fine lines reveal blur; saturated hard edges reveal refraction and tint.
+            val stripeWidth = 10f * resources.displayMetrics.density
+            val stripeColors = intArrayOf(0xffef5b55.toInt(), 0xffffd66b.toInt(), 0xff53c7ae.toInt(), 0xff6299ec.toInt())
+            stripeColors.forEachIndexed { index, color ->
+                paint.color = color
+                val x = width * .2f + index * stripeWidth
+                canvas.drawRect(x, 0f, x + stripeWidth, height.toFloat(), paint)
+            }
+            paint.color = Color.WHITE
+            canvas.drawCircle(width * .77f, height * .32f, height * .17f, paint)
+            paint.color = Color.BLACK
+            paint.strokeWidth = 2f * resources.displayMetrics.density
+            for (line in 0..5) {
+                val y = height * .63f + line * 6f * resources.displayMetrics.density
+                canvas.drawLine(width * .55f, y, width * .94f, y, paint)
+            }
         }
     }
 }
