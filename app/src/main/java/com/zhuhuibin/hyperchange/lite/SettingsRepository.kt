@@ -24,6 +24,9 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
 
     override fun onCreate() {
         super.onCreate()
+        synchronized(settingsLock) {
+            migrateLocal(getSharedPreferences(PREFERENCE_GROUP, MODE_PRIVATE))
+        }
         // OEM glass methods are hidden APIs. No access to another app's data is needed.
         runCatching { org.lsposed.hiddenapibypass.HiddenApiBypass.addHiddenApiExemptions("Landroid/view/View;") }
         XposedServiceHelper.registerListener(this)
@@ -37,13 +40,16 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
                     val local = getSharedPreferences(PREFERENCE_GROUP, MODE_PRIVATE)
                     val remote = service.getRemotePreferences(PREFERENCE_GROUP)
                     if (!local.getBoolean("_initialized", false)) {
+                        val restored = SettingsMigration.forBinding(local.all, remote.all)
                         val edit = local.edit()
                         for (spec in LiteCatalog.entries) {
-                            val candidate = remote.all[spec.key] ?: spec.defaultValue
+                            val candidate = restored[spec.key] ?: spec.defaultValue
                             put(edit, spec, runCatching { spec.validate(candidate) }.getOrDefault(spec.defaultValue))
                         }
-                        check(edit.putBoolean("_initialized", true).commit()) { "Could not restore settings" }
+                        check(edit.putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+                            .putBoolean("_initialized", true).commit()) { "Could not restore settings" }
                     }
+                    migrateLocal(local)
                     publish(local, remote)
                     syncFailed = false
                 }.onFailure {
@@ -69,13 +75,31 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     }
 
     internal fun publish(local: SharedPreferences, remote: SharedPreferences) {
+        val resolved = SettingsMigration.resolve(local.all)
         val edit = remote.edit()
         for (spec in LiteCatalog.entries) {
-            val value = local.all[spec.key] ?: spec.defaultValue
+            val value = resolved[spec.key] ?: spec.defaultValue
             put(edit, spec, runCatching { spec.validate(value) }.getOrDefault(spec.defaultValue))
         }
-        check(edit.commit()) { "Remote settings write was not accepted" }
+        check(edit.putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION).commit()) {
+            "Remote settings write was not accepted"
+        }
     }
+}
+
+/** Persist only the new keys until first binding; opening the app is not a local edit. */
+private fun migrateLocal(preferences: SharedPreferences) {
+    val original = preferences.all
+    val resolved = SettingsMigration.resolve(original)
+    val keys = listOf(SettingsMigration.MEDIA_KEY, SettingsMigration.LOCKSCREEN_KEY, SettingsMigration.VERSION_KEY)
+    val ownsLocalState = SettingsMigration.hasLocalState(original)
+    if (keys.all { original[it] == resolved[it] } && (!ownsLocalState || original["_initialized"] == true)) return
+    val edit = preferences.edit()
+        .putBoolean(SettingsMigration.MEDIA_KEY, resolved[SettingsMigration.MEDIA_KEY] as Boolean)
+        .putBoolean(SettingsMigration.LOCKSCREEN_KEY, resolved[SettingsMigration.LOCKSCREEN_KEY] as Boolean)
+        .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+    if (ownsLocalState) edit.putBoolean("_initialized", true)
+    check(edit.commit()) { "Could not migrate settings" }
 }
 
 internal fun put(edit: SharedPreferences.Editor, spec: LiteSetting, value: Any) {
@@ -91,17 +115,21 @@ class SettingsRepository(context: Context) {
     val syncFailed: Boolean get() = connected && app.syncFailed
     private val observer: () -> Unit = { onChange?.invoke() }
 
-    init { app.observers.add(observer) }
+    init {
+        synchronized(app.settingsLock) { migrateLocal(preferences) }
+        app.observers.add(observer)
+    }
 
     fun set(spec: LiteSetting, value: Any) = synchronized(app.settingsLock) {
         val valid = spec.validate(value)
         val edit = preferences.edit().putBoolean("_initialized", true)
+            .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
         put(edit, spec, valid)
         check(edit.commit()) { "Could not save settings" }
         sync()
     }
 
-    fun reset() = applyValues(LiteCatalog.entries.associate { it.key to it.defaultValue })
+    fun reset() = applyValues(SettingsCodec.defaults(LiteCatalog.entries))
 
     fun exportJson(): String = SettingsCodec.encode(LiteCatalog.entries, preferences.all)
 
@@ -113,6 +141,7 @@ class SettingsRepository(context: Context) {
 
     private fun applyValues(values: Map<String, Any>) = synchronized(app.settingsLock) {
         val edit = preferences.edit().putBoolean("_initialized", true)
+            .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
         for (spec in LiteCatalog.entries) values[spec.key]?.let { put(edit, spec, it) }
         check(edit.commit()) { "Could not save settings" }
         sync()
@@ -136,9 +165,14 @@ class SettingsRepository(context: Context) {
 
 /** Decode and validate the entire document before changing any preference. */
 object SettingsCodec {
+    /** Reset stores the same canonical values that publishing and importing accept. */
+    fun defaults(specs: List<LiteSetting>): Map<String, Any> =
+        specs.associate { it.key to it.validate(it.defaultValue) }
+
     fun encode(specs: List<LiteSetting>, values: Map<String, *>): String {
+        val resolved = SettingsMigration.resolve(values)
         val settings = JSONObject()
-        specs.forEach { settings.put(it.key, it.validate(values[it.key] ?: it.defaultValue)) }
+        specs.forEach { settings.put(it.key, it.validate(resolved[it.key] ?: it.defaultValue)) }
         return JSONObject().put("format", "hyperchange-lite").put("version", 1)
             .put("settings", settings).toString(2)
     }
@@ -150,8 +184,9 @@ object SettingsCodec {
             "Unsupported preset format"
         }
         val settings = root.getJSONObject("settings")
-        return buildMap {
+        val validated = buildMap {
             specs.forEach { spec -> if (settings.has(spec.key)) put(spec.key, spec.validate(settings.get(spec.key))) }
         }
+        return SettingsMigration.forPreset(specs, validated)
     }
 }

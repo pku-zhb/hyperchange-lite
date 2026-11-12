@@ -7,6 +7,8 @@ object NotificationSettingsSpec {
             add(LiteSetting.toggle(key, title, group, default, summary))
         fun number(key: String, title: String, group: String, default: Float, min: Float, max: Float, step: Float = 1f) =
             add(LiteSetting.number(key, title, group, default, min, max, step))
+        toggle(SettingsMigration.LOCKSCREEN_KEY, "锁屏通知效果", "通知作用范围",
+            summary = "限制锁屏／AOD 及锁屏上拉列表的普通通知材质、按压、增删动画和分组堆叠。与 HMC 共用时关闭；音乐卡和悬浮通知按各自范围生效")
         val tilt = "通知按压"
         toggle("notification_press_tilt_enabled", "按压倾斜", tilt)
         toggle("notification_press_tilt_row_enabled", "普通通知", tilt, true)
