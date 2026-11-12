@@ -9,13 +9,16 @@ import android.os.Looper
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import org.json.JSONObject
+import java.util.concurrent.Executors
 
 const val PREFERENCE_GROUP = "hyperchange_lite"
 
 /** The app owns its settings. Binding never replaces edits made while disconnected. */
 class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
-    internal var service: XposedService? = null
-    internal var syncFailed = false
+    @Volatile internal var service: XposedService? = null
+    @Volatile internal var syncFailed = false
+    internal val settingsLock = Any()
+    internal val settingsExecutor = Executors.newSingleThreadExecutor()
     internal val observers = mutableSetOf<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
 
@@ -28,33 +31,41 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
 
     override fun onServiceBind(service: XposedService) {
         main.post {
-            this.service = service
-            runCatching {
-                val local = getSharedPreferences(PREFERENCE_GROUP, MODE_PRIVATE)
-                val remote = service.getRemotePreferences(PREFERENCE_GROUP)
-                if (!local.getBoolean("_initialized", false)) {
-                    val edit = local.edit()
-                    for (spec in LiteCatalog.entries) {
-                        val candidate = remote.all[spec.key] ?: spec.defaultValue
-                        put(edit, spec, runCatching { spec.validate(candidate) }.getOrDefault(spec.defaultValue))
+            synchronized(settingsLock) {
+                this.service = service
+                runCatching {
+                    val local = getSharedPreferences(PREFERENCE_GROUP, MODE_PRIVATE)
+                    val remote = service.getRemotePreferences(PREFERENCE_GROUP)
+                    if (!local.getBoolean("_initialized", false)) {
+                        val edit = local.edit()
+                        for (spec in LiteCatalog.entries) {
+                            val candidate = remote.all[spec.key] ?: spec.defaultValue
+                            put(edit, spec, runCatching { spec.validate(candidate) }.getOrDefault(spec.defaultValue))
+                        }
+                        check(edit.putBoolean("_initialized", true).commit()) { "Could not restore settings" }
                     }
-                    check(edit.putBoolean("_initialized", true).commit()) { "Could not restore settings" }
+                    publish(local, remote)
+                    syncFailed = false
+                }.onFailure {
+                    syncFailed = true
+                    android.util.Log.w("HyperChangeLite", "Preference connection failed", it)
                 }
-                publish(local, remote)
-                syncFailed = false
-            }.onFailure {
-                syncFailed = true
-                android.util.Log.w("HyperChangeLite", "Preference connection failed", it)
             }
-            observers.toList().forEach { it() }
+            notifyObservers()
         }
     }
 
     override fun onServiceDied(service: XposedService) {
         main.post {
-            if (this.service === service) this.service = null
-            observers.toList().forEach { it() }
+            synchronized(settingsLock) { if (this.service === service) this.service = null }
+            notifyObservers()
         }
+    }
+
+    internal fun notifyObservers() {
+        // An old Activity may finish a queued write after rotation. Notify the current
+        // repository owners on the main thread instead of only that old Activity.
+        main.post { observers.toList().forEach { it() } }
     }
 
     internal fun publish(local: SharedPreferences, remote: SharedPreferences) {
@@ -82,7 +93,7 @@ class SettingsRepository(context: Context) {
 
     init { app.observers.add(observer) }
 
-    fun set(spec: LiteSetting, value: Any) {
+    fun set(spec: LiteSetting, value: Any) = synchronized(app.settingsLock) {
         val valid = spec.validate(value)
         val edit = preferences.edit().putBoolean("_initialized", true)
         put(edit, spec, valid)
@@ -100,7 +111,7 @@ class SettingsRepository(context: Context) {
         return values.size
     }
 
-    private fun applyValues(values: Map<String, Any>) {
+    private fun applyValues(values: Map<String, Any>) = synchronized(app.settingsLock) {
         val edit = preferences.edit().putBoolean("_initialized", true)
         for (spec in LiteCatalog.entries) values[spec.key]?.let { put(edit, spec, it) }
         check(edit.commit()) { "Could not save settings" }
@@ -117,7 +128,7 @@ class SettingsRepository(context: Context) {
         } catch (error: Exception) {
             app.syncFailed = true
             throw error
-        } finally { onChange?.invoke() }
+        } finally { app.notifyObservers() }
     }
 
     fun close() { app.observers.remove(observer); onChange = null }

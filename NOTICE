@@ -17,11 +17,14 @@ and volume effects and local preview interactions. No HyperLight binary, native
 library, decompiled source tree or proprietary preview asset is distributed.
 
 Runtime dependencies retain their own licenses:
+- Miuix: Apache License 2.0
+- Jetpack / Compose Multiplatform: Apache License 2.0
 - Kotlin standard library: Apache License 2.0
 - libxposed service and interface: their upstream Apache License 2.0 notices
 - LSPosed HiddenApiBypass: Apache License 2.0
 
 Source projects:
 https://github.com/ColdP/HyperChanger
+https://github.com/compose-miuix-ui/miuix
 https://github.com/libxposed/service
 https://github.com/LSPosed/AndroidHiddenApiBypass

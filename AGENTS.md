@@ -22,6 +22,15 @@ ColdP/HyperChanger. Its package is `com.zhuhuibin.hyperchange.lite`.
   fork. Do not publish to upstream or create releases without explicit authorization.
 - Keep UI prose in Chinese with simple labels. Recreate preview behavior using our own
   drawing/content and actual OEM glass APIs; distinguish fallback previews honestly.
+- The settings App uses actual Miuix Compose components. Keep a clear feature home,
+  vertically grouped settings and contextual previews; do not return to an endless
+  horizontal group strip. Preserve the application ID and preference keys on upgrades.
+  The owner confirmed the launcher icon works; retain its existing launcher/LSP entry.
+- Global class-loading callbacks must keep their Java-only, callback-entry guard and
+  defer adapter installation; see `design/STARTUP_SAFETY.md`. Preserve the upstream's
+  critical startup ordering when pruning features instead of rewriting it casually.
+  Keep raw ANR evidence out of commits. Do not leave LSPosed safe mode or reload scopes
+  while startup acceptance remains pending without the owner's explicit instruction.
 - Before delivering each APK version, run `tools/archive-preview.py`. Retain the signed
   versioned APK under `releases/local/` and copy it to the owner's existing
   `~/Harbor Drive/02 Personal Files/Miduo/` archive. Verify equal SHA-256 hashes and

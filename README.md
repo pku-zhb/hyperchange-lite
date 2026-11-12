@@ -13,6 +13,12 @@ replacement, camera module, third-party navigation adaptations, OCR, or prebuilt
 native patch library. HMC Duo remains the owner of its lockscreen content.
 See [deferred ownership](design/DEFERRED.md), [recovery boundaries](design/RECOVERY.md)
 and [host validation](design/VALIDATION.md).
+The settings App uses [Miuix](https://github.com/compose-miuix-ui/miuix) with feature
+navigation, grouped controls and contextual previews. See the [App design](design/APP.md).
+
+Preview 1 had a plugin-discovery startup regression. Preview 2 contains a guarded,
+deferred discovery repair; read the [startup recovery boundary](design/STARTUP_SAFETY.md)
+before any device scope trial. Host verification does not establish device recovery.
 
 ## Build
 

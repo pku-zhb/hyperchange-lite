@@ -1,4 +1,30 @@
-# Host validation: 0.1.0-preview1
+# Host validation
+
+## 0.1.0-preview2 candidate
+
+The candidate combines the Miuix settings App with the startup repair documented
+in [STARTUP_SAFETY.md](STARTUP_SAFETY.md). It has not been accepted on the phone.
+
+- All 35 JVM tests passed: the original 25, two checks that every setting remains
+  reachable in the new App, and eight plugin-discovery startup regressions.
+- Debug and R8-minified release builds passed, including release lint-vital.
+- The Java discovery callback, queued delivery and main-thread scheduler were
+  inspected as compiled bytecode: none references Kotlin helpers. Keep rules
+  preserve this boundary in the optimized APK.
+- Miuix 0.9.4 uses the explicitly selected Kotlin/Compose compiler 2.4.20; AGP
+  remains 9.2.1. Existing settings keys, JSON format, application ID and signing
+  identity are retained.
+- AndroidX's open-source graphics-path native library is now a transitive UI
+  dependency. There is still no native Xposed entry or HyperChanger patch library.
+- No GUI automation, screenshots, installation, scope reload or safe-mode change
+  was used to verify this candidate. First-open plugin behavior and actual SystemUI
+  startup remain mandatory acceptance items under the owner's control.
+
+The App now uses feature navigation, Miuix preferences, numeric entry and optional
+previews. Shared serialized settings work and main-thread observation preserve
+pending writes across Activity recreation. Visual usability remains user-verified.
+
+## 0.1.0-preview1 historical host checks
 
 Validated on 2026-11-12 against the extracted HyperChanger base `5d89372`.
 

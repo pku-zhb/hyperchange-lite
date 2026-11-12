@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 android {
     namespace = "com.zhuhuibin.hyperchange.lite"
@@ -9,8 +10,8 @@ android {
         applicationId = "com.zhuhuibin.hyperchange.lite"
         minSdk = 35
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0-preview1"
+        versionCode = 2
+        versionName = "0.1.0-preview2"
     }
     buildTypes {
         release {
@@ -22,10 +23,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    buildFeatures { compose = true }
     testOptions { unitTests.isReturnDefaultValues = true }
     packaging { resources { merges += "META-INF/xposed/*" } }
 }
 dependencies {
+    implementation("androidx.activity:activity-compose:1.12.3")
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-preference-android:0.9.4")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
     compileOnly("io.github.libxposed:api:102.0.0")
     implementation("io.github.libxposed:service:102.0.0")
