@@ -13,8 +13,9 @@ replacement, camera module, third-party navigation adaptations, OCR, or prebuilt
 native patch library. HMC Duo remains the owner of its lockscreen content.
 See [deferred ownership](design/DEFERRED.md), [recovery boundaries](design/RECOVERY.md)
 and [host validation](design/VALIDATION.md).
-The settings App uses [Miuix](https://github.com/compose-miuix-ui/miuix) with feature
-navigation, grouped controls and contextual previews. See the [App design](design/APP.md).
+The settings App uses [Miuix](https://github.com/compose-miuix-ui/miuix). Material
+editing has one entry with a pinned top preview; notification and volume behavior
+have separate pages. See the [App design](design/APP.md).
 
 Preview 1 had a plugin-discovery startup regression. Preview 2 contains a guarded,
 deferred discovery repair; read the [startup recovery boundary](design/STARTUP_SAFETY.md)
@@ -28,7 +29,7 @@ migration and paired acceptance boundary. The modules do not exchange settings
 or require a shared service.
 
 Preview 4 adds the six original HyperChanger material recipes under
-**柔光玻璃 → 材质预设**, with A/E shortcuts, a material-only trial restore and a
+the material editor's **预设** category, with A/E shortcuts, a material-only trial restore and a
 contrast test background. Native-versus-schematic preview status is explicit;
 existing bound notifications can refresh on first tuning enable without waiting
 for a later OEM update. See [material comparisons](design/MATERIAL_PRESETS.md).
@@ -45,6 +46,9 @@ tools/build.sh :app:testDebugUnitTest :app:assembleDebug
 The script verifies the Harbor mount and places every build output and cache
 outside the source tree. For another environment, set `JAVA_HOME`, `ANDROID_HOME`
 and `LITE_BUILD_ROOT`, then use `./gradlew -I tools/gradle-init.gradle`.
+Concurrent worktrees must set `LITE_DEV_CACHE` to their own directory under
+`/Volumes/Harbor/DevCache/`; this isolates build, project, Kotlin and temporary
+outputs while retaining the shared downloaded Gradle dependencies.
 
 Before delivering a preview in the maintainer environment, run
 `python3 tools/archive-preview.py`. It checks the APK identity and signature,

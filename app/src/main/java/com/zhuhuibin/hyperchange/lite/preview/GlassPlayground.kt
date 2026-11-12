@@ -203,7 +203,9 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     fun setMaterialComparison(value: Boolean) {
         if (materialComparison == value) return
         materialComparison = value
-        val captionHeight = dp(if (value) 44 else 35)
+        val captionLines = if (value) 3 else 2
+        val captionHeight = max(dp(if (value) 44 else 35),
+            kotlin.math.ceil(caption.paint.fontSpacing * captionLines).toInt() + caption.paddingTop + caption.paddingBottom)
         caption.layoutParams = LayoutParams(-1, captionHeight, Gravity.BOTTOM)
         content.layoutParams = LayoutParams(-1, -1).apply { bottomMargin = captionHeight }
         refresh()

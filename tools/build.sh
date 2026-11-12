@@ -7,7 +7,12 @@ if ! mount | /usr/bin/grep -Fq " on $volume (" || [[ ! -w "$volume/DevCache" ]];
     echo 'Harbor must be mounted with a writable DevCache directory.' >&2
     exit 1
 fi
-cache="$volume/DevCache/hyperchange-lite"
+cache="${LITE_DEV_CACHE:-$volume/DevCache/hyperchange-lite}"
+# Worktrees can isolate every mutable build output while sharing downloaded tools.
+case "$cache" in
+    "$volume/DevCache/"*) ;;
+    *) echo 'LITE_DEV_CACHE must be inside mounted Harbor DevCache.' >&2; exit 1 ;;
+esac
 # Reuse installed tools, without retaining another source tree.
 existing_tools="$volume/DevCache/hypermusiccover-enhanced"
 export ANDROID_HOME="${ANDROID_HOME:-$existing_tools/android-sdk}"

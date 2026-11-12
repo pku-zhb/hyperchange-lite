@@ -16,17 +16,22 @@ Navigation follows the user's task rather than the implementation's setting keys
 
 ```text
 Feature home
-  Glass / Notifications / Control Center / Volume / Widgets and sidebar / Presets
-    Feature details
-      Common switches
-      Vertical settings sections and optional advanced controls
-      Contextual preview, with a dedicated preview destination
+  Material editor
+    One fixed top preview, at every window width
+    Scrollable scene / category selection and material controls
+    Presets / scopes / surface / background / notification / control / volume / widgets
+  Notification behavior / Volume behavior
+    Vertical settings sections and optional interaction previews
+  Configuration
+    Import / Export / Reset
 ```
 
 The preview is the app's distinctive interaction. Keep the rest quiet and familiar:
-real Miuix grouped cards, preferences, switches, sliders, buttons and dialogs. Narrow
-windows use one column; wide windows can place controls and preview side by side.
-Do not require lateral scrolling through a large set of setting-group labels.
+real Miuix grouped cards, preferences, switches, sliders, buttons and dialogs. The
+material preview stays above the controls on narrow, wide and landscape windows;
+short windows reduce its height. Categories use a dropdown and never a large
+horizontal strip. Each material category exposes all its parameters directly.
+See [the editor brief and acceptance boundary](MATERIAL_EDITOR.md).
 
 ## Boundaries
 
