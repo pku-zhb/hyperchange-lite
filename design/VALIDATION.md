@@ -20,6 +20,10 @@
 - Device access checked only the installed version before delivery; no GUI,
   screenshots, settings changes, installation or scope reload were used for host
   verification. Actual App/system A/E visual comparison is owner acceptance.
+- Signed preview 4 was archived in `releases/local/` and the personal Miduo
+  folder, then copied to phone Download with matching SHA-256. Transfer-only
+  temporary files were removed; previous APK versions remain intact. The owner
+  retains manual installation and scope activation.
 
 ## 0.1.0-preview3 compatibility candidate
 
