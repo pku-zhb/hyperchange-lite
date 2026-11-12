@@ -96,6 +96,11 @@ acceptance; neither a host build nor tests across different version combinations
 prove device coexistence. Third-party module participation must be recorded; an
 unisolated result remains pending isolated validation.
 
+At Lite delivery preparation, HMC's clean worktree had reached `43a8136`
+(`0.2.0-preview.16`), after `994f333` and `652f867`. The proposed acceptance pair
+is HMC preview 16 with Lite `0.1.0-preview3`; the HMC executor owns its APK delivery
+and checks. This records a candidate pair, not a passed result.
+
 The owner's next acceptance should be limited to:
 
 1. After independent startup acceptance, configuration B: disable Lite music
