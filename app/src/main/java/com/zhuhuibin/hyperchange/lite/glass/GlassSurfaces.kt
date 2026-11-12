@@ -3,6 +3,7 @@
 package com.zhuhuibin.hyperchange.lite.glass
 
 import android.view.View
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
 import java.util.WeakHashMap
 
 internal enum class GlassSurface { NOTIFICATION, CONTROL_CENTER, VOLUME, SHADE }
@@ -12,14 +13,63 @@ internal object GlassSurfaces {
     private val volumeIds = setOf("blur_frame", "volume_column_slider", "volume_column_slider_bg_glass", "volume_column_slider_bg_blend")
     private val mediaIds = setOf("media_bg", "media_background", "media_card_background")
     private val mediaRoots = WeakHashMap<View, Boolean>()
+    private val roleAccessors = SurfaceRoleAccessors()
+    private val decisions = MaterialCallMemo<View, Facts, Long>()
 
-    fun id(view: View): String = if (view.id == View.NO_ID || view.id == 0) "" else
+    /** Only for synchronous pure preparation. Never wrap native setters or queued work. */
+    fun <T> withFacts(action: () -> T): T = decisions.within(action)
+
+    private class Facts(private val view: View) {
+        val parent = view.parent
+        private var idValue: String? = null
+        private var excludedValue: Boolean? = null
+        private var surfaceRead = false
+        private var surfaceValue: GlassSurface? = null
+        private var mediaValue: Boolean? = null
+        private var rowRead = false
+        private var rowValue: View? = null
+        private var headsUpValue: Boolean? = null
+        private var focusValue: Boolean? = null
+        private var rootValue: View? = null
+        val id get() = idValue ?: idNow(view).also { idValue = it }
+        val excluded get() = excludedValue ?: excludedNow(view).also { excludedValue = it }
+        val surface get(): GlassSurface? {
+            if (!surfaceRead) { surfaceValue = classifyNow(view); surfaceRead = true }
+            return surfaceValue
+        }
+        val media get() = mediaValue ?: mediaNow(view).also { mediaValue = it }
+        val row get(): View? {
+            if (!rowRead) { rowValue = rowNow(view); rowRead = true }
+            return rowValue
+        }
+        val headsUp get() = headsUpValue ?: headsUpNow(view).also { headsUpValue = it }
+        val focus get() = focusValue ?: focusNow(view).also { focusValue = it }
+        val root get() = rootValue ?: materialRootNow(view).also { rootValue = it }
+    }
+
+    private fun facts(view: View): Facts? {
+        val found = decisions.scoped(view, NotificationScope.generation) { Facts(view) } ?: return null
+        if (found.parent === view.parent) return found
+        decisions.forget(view)
+        return decisions.scoped(view, NotificationScope.generation) { Facts(view) }
+    }
+
+    fun id(view: View): String = facts(view)?.id ?: idNow(view)
+    fun excluded(view: View): Boolean = facts(view)?.excluded ?: excludedNow(view)
+    fun classify(view: View): GlassSurface? = facts(view).let { if (it != null) it.surface else classifyNow(view) }
+    fun media(view: View): Boolean = facts(view)?.media ?: mediaNow(view)
+    fun row(view: View): View? = facts(view).let { if (it != null) it.row else rowNow(view) }
+    fun headsUp(view: View): Boolean = facts(view)?.headsUp ?: headsUpNow(view)
+    fun focus(view: View): Boolean = facts(view)?.focus ?: focusNow(view)
+    fun materialRoot(view: View): View = facts(view)?.root ?: materialRootNow(view)
+
+    private fun idNow(view: View): String = if (view.id == View.NO_ID || view.id == 0) "" else
         runCatching { view.resources.getResourceEntryName(view.id) }.getOrDefault("")
 
     fun lineage(view: View): Sequence<View> = generateSequence(view) { it.parent as? View }
 
     /** Unknown or module-owned views fail closed even inside a vendor material call. */
-    fun excluded(view: View): Boolean = lineage(view).any { candidate ->
+    private fun excludedNow(view: View): Boolean = lineage(view).any { candidate ->
         val name = candidate.javaClass.name
         val resource = id(candidate)
         name.startsWith("com.zhuhuibin.") || name.startsWith("btm.m.") ||
@@ -29,7 +79,7 @@ internal object GlassSurfaces {
             resource in setOf("time_group", "clock", "clock_view", "keyguard_clock", "date_view")
     }
 
-    fun classify(view: View): GlassSurface? {
+    private fun classifyNow(view: View): GlassSurface? {
         if (excluded(view)) return null
         val name = view.javaClass.name
         val resource = id(view)
@@ -56,13 +106,13 @@ internal object GlassSurfaces {
         if (!excluded(view) && !controlCenter(view)) synchronized(mediaRoots) { mediaRoots[view] = true }
     }
 
-    fun materialRoot(view: View): View = if (media(view)) {
+    private fun materialRootNow(view: View): View = if (media(view)) {
         lineage(view).firstOrNull { it.javaClass.name.endsWith(".MiuiMediaHeaderView") } ?: lineage(view).firstOrNull {
             synchronized(mediaRoots) { mediaRoots.containsKey(it) }
         } ?: view
     } else row(view) ?: view
 
-    fun media(view: View): Boolean {
+    private fun mediaNow(view: View): Boolean {
         if (controlCenter(view)) return false
         return lineage(view).any {
             synchronized(mediaRoots) { mediaRoots.containsKey(it) } || mediaOwner(it.javaClass.name)
@@ -80,19 +130,14 @@ internal object GlassSurfaces {
             it.javaClass.name.startsWith("com.miui.systemui.controlcenter.")
     }
 
-    fun row(view: View): View? = lineage(view).firstOrNull { it.javaClass.name.contains("ExpandableNotificationRow") }
+    private fun rowNow(view: View): View? = lineage(view).firstOrNull { it.javaClass.name.contains("ExpandableNotificationRow") }
 
-    fun headsUp(view: View): Boolean = row(view)?.let { row ->
-        listOf("isHeadsUpState", "isHeadsUp").any { name ->
-            runCatching { row.javaClass.getMethod(name).invoke(row) == true }.getOrDefault(false)
-        }
+    private fun headsUpNow(view: View): Boolean = row(view)?.let { row ->
+        roleAccessors.headsUp(row) == true
     } ?: false
 
-    fun focus(view: View): Boolean = row(view)?.let { row ->
-        runCatching {
-            val injector = row.javaClass.getMethod("getInjector").invoke(row) ?: return@runCatching false
-            injector.javaClass.getMethod("isFocusNotification").invoke(injector) == true
-        }.getOrDefault(false)
+    private fun focusNow(view: View): Boolean = row(view)?.let { row ->
+        roleAccessors.focus(row) == true
     } ?: false
 }
 

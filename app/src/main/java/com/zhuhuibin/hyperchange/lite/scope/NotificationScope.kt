@@ -28,8 +28,19 @@ internal object NotificationScope {
     @Volatile private var keyguard = WeakReference<Any>(null)
     @Volatile private var statusBar = WeakReference<Any>(null)
     private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private class Decision(val view: View, val parent: Any?, val snapshot: NotificationScopeSnapshot)
+    private val decisions = ThreadLocal<Decision>()
+
+    private fun decision(view: View): NotificationScopeSnapshot? = decisions.get()?.takeIf {
+        it.view === view && it.parent === view.parent && it.snapshot.revision == generation
+    }?.snapshot
 
     fun role(view: View): NotificationRole {
+        decision(view)?.let { return it.role }
+        return readRole(view)
+    }
+
+    private fun readRole(view: View): NotificationRole {
         if (GlassSurfaces.media(view)) return NotificationRole.MEDIA
         val row = GlassSurfaces.row(view)
         synchronized(pendingRoles) { pendingRoles[row]?.let { return it } }
@@ -37,16 +48,44 @@ internal object NotificationScope {
     }
 
     fun sceneAllows(view: View): Boolean {
+        decision(view)?.let { return it.allowed }
         refreshSnapshot()
-        return NotificationScopePolicy.allows(role(view), lockscreenEffects, scene)
+        return NotificationScopePolicy.allows(readRole(view), lockscreenEffects, scene)
     }
     fun token(view: View, ordinaryScene: Boolean = true): NotificationScopeToken {
+        decision(view)?.let { return if (ordinaryScene) it.token else it.token.copy(generation = 0L) }
         val role = role(view)
+        return token(view, role, ordinaryScene)
+    }
+
+    private fun token(view: View, role: NotificationRole, ordinaryScene: Boolean): NotificationScopeToken {
         val row = GlassSurfaces.row(view) ?: view
         val roleGeneration = synchronized(roleGenerations) { roleGenerations[row] ?: 0L }
         return NotificationScopeToken(if (ordinaryScene && role == NotificationRole.ORDINARY) sceneGeneration else 0L, role, roleGeneration)
     }
     fun isCurrent(view: View, token: NotificationScopeToken, ordinaryScene: Boolean = true): Boolean = token == token(view, ordinaryScene)
+
+    /** One current decision for a synchronous setter's pure preparation, not a native call. */
+    fun capture(view: View): NotificationScopeSnapshot {
+        refreshSnapshot()
+        val role = readRole(view)
+        return NotificationScopeSnapshot(role, token(view, role, true),
+            NotificationScopePolicy.allows(role, lockscreenEffects, scene), generation)
+    }
+
+    fun <T> withSnapshot(view: View, snapshot: NotificationScopeSnapshot, action: () -> T): T {
+        val previous = decisions.get()
+        decisions.set(Decision(view, view.parent, snapshot))
+        return try { action() }
+        finally { if (previous == null) decisions.remove() else decisions.set(previous) }
+    }
+
+    /** Native work may change role fields without a generation signal; read them again. */
+    fun stillCurrent(view: View, snapshot: NotificationScopeSnapshot): Boolean {
+        val current = capture(view)
+        return current.revision == snapshot.revision && current.token == snapshot.token &&
+            current.allowed == snapshot.allowed
+    }
 
     fun addListener(listener: () -> Unit) { synchronized(listeners) { listeners += listener } }
 

@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import com.zhuhuibin.hyperchange.lite.HookRuntime
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScopeSnapshot
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScopeToken
 import java.lang.reflect.Method
 import java.lang.ref.WeakReference
@@ -62,6 +63,23 @@ internal class ViewMaterialEngine(
     private var addBlend: Method? = null
     private var refresh: Runnable? = null
     private var fullRefreshPending = false
+    private class Prepared(val input: Array<Any?>, val args: Array<Any?>, val ticket: Long,
+                           val scene: NotificationScopeSnapshot?, val parent: Any?)
+
+    /** No fact or permission memo survives a native call; heads-up state can change there. */
+    private fun <T> prepare(view: View, action: (GlassSurface?, NotificationScopeSnapshot?) -> T): T =
+        GlassSurfaces.withFacts {
+            val surface = GlassSurfaces.classify(view)
+            val scene = if (surface == GlassSurface.NOTIFICATION) NotificationScope.capture(view) else null
+            if (scene == null) action(surface, null)
+            else NotificationScope.withSnapshot(view, scene) { action(surface, scene) }
+        }
+
+    private fun ready(view: View, value: Prepared): Boolean = generation.current(value.ticket,
+        value.parent === view.parent && (value.scene == null || value.scene.revision == NotificationScope.generation))
+
+    private fun current(view: View, value: Prepared): Boolean = generation.current(value.ticket,
+        value.parent === view.parent && (value.scene == null || NotificationScope.stillCurrent(view, value.scene)))
 
     fun install() {
         setter("setMiGlass", FloatArray::class.java)
@@ -99,35 +117,45 @@ internal class ViewMaterialEngine(
             runtime.hook(method, "lite-glass:$name") { chain ->
                 val view = chain.thisObject as? View ?: return@hook chain.proceed()
                 if (bypassView.get() === view) return@hook chain.proceed()
-                val windowSelfBlur = name == "setMiSelfBlur" && GlassSurfaces.isShadeWindow(view)
-                if (!accepts(view) && !windowSelfBlur) return@hook chain.proceed()
-                if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, scopeAllows(view))
-                if (name == "setMiSelfBlur" && !windowSelfBlur && GlassSurfaces.classify(view) != GlassSurface.SHADE) return@hook chain.proceed()
-                if (name == "setBackgroundColor" && GlassSurfaces.classify(view) != GlassSurface.SHADE) {
-                    // A different owner's plain background supersedes our old material.
-                    if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) { NotificationMaterialWrites.touch(view); forget(view) }
-                    return@hook chain.proceed()
-                }
-                if (!scopeAllows(view)) { forget(view); return@hook chain.proceed() }
-                if ((name == "setMiBackgroundBlendColors" || name == "setMiSelfBlur") && blendDispatch.get() == true) return@hook chain.proceed()
-                val ticket = generation.value
-                val scene = if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) NotificationScope.token(view) else null
-                val input = Array<Any?>(types.size) { chain.getArg(it) }
-                val args = adjustExternal(view, method, input)
-                if (!generation.current(ticket, scopeAllows(view) && (scene == null || NotificationScope.isCurrent(view, scene)))) { forget(view); return@hook chain.proceed() }
+                val prepared = prepare(view) { surface, scene ->
+                    val windowSelfBlur = name == "setMiSelfBlur" && GlassSurfaces.isShadeWindow(view)
+                    if (!accepts(view) && !windowSelfBlur) return@prepare null
+                    val allowed = scopeAllows(view)
+                    if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
+                    if (name == "setMiSelfBlur" && !windowSelfBlur && surface != GlassSurface.SHADE) return@prepare null
+                    if (name == "setBackgroundColor" && surface != GlassSurface.SHADE) {
+                        // A different owner's plain background supersedes our old material.
+                        if (surface == GlassSurface.NOTIFICATION) { NotificationMaterialWrites.touch(view); forget(view) }
+                        return@prepare null
+                    }
+                    if (!allowed) { forget(view); return@prepare null }
+                    if ((name == "setMiBackgroundBlendColors" || name == "setMiSelfBlur") && blendDispatch.get() == true)
+                        return@prepare null
+                    val ticket = generation.value
+                    val parent = view.parent
+                    val input = Array<Any?>(types.size) { chain.getArg(it) }
+                    Prepared(input, adjustPrepared(view, method, input, surface, scene, false), ticket, scene, parent)
+                } ?: return@hook chain.proceed()
+                if (!ready(view, prepared)) { forget(view); return@hook chain.proceed() }
                 val blending = name == "setMiBackgroundBlendColors" || name == "setMiSelfBlur"
                 if (blending) blendDispatch.set(true)
-                val result = try { chain.proceedWith(view, args) } finally { if (blending) blendDispatch.remove() }
-                if (generation.current(ticket, scopeAllows(view) && (scene == null || NotificationScope.isCurrent(view, scene))))
-                    synchronized(baselines) { if (!sameArgs(input, args) || owned.containsKey(view)) owned[view] = Ownership(view) }
+                val result = try { chain.proceedWith(view, prepared.args) } finally { if (blending) blendDispatch.remove() }
+                if (current(view, prepared))
+                    synchronized(baselines) { if (!sameArgs(prepared.input, prepared.args) || owned.containsKey(view)) owned[view] = Ownership(view) }
+                else forget(view)
                 result
             }
         }.onFailure { runtime.log("OEM glass setter unavailable: $name", it) }
     }
 
     /** Also used for MAML's reflective writer so it is tuned exactly once. */
-    fun adjustExternal(view: View, method: Method, input: Array<Any?>): Array<Any?> {
-        if (!scopeAllows(view)) { forget(view); return input }
+    fun adjustExternal(view: View, method: Method, input: Array<Any?>): Array<Any?> = prepare(view) { surface, scene ->
+        if (!scopeAllows(view)) { forget(view); input }
+        else adjustPrepared(view, method, input, surface, scene, true)
+    }
+
+    private fun adjustPrepared(view: View, method: Method, input: Array<Any?>, surface: GlassSurface?,
+                               scene: NotificationScopeSnapshot?, recordOwnership: Boolean): Array<Any?> {
         val name = method.name
         var baseline = copyArgs(input)
         if (name == "setMiGlass") {
@@ -137,7 +165,7 @@ internal class ViewMaterialEngine(
                     baselines.getOrPut(view) { linkedMapOf() }[method] = baseline
                     arrayPairs.remove(view)
                     owned.remove(view)
-                    if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) NotificationMaterialWrites.touch(view)
+                    if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.touch(view)
                 }
                 return input
             }
@@ -146,7 +174,7 @@ internal class ViewMaterialEngine(
         }
         if (refreshing.get() != true) synchronized(baselines) {
             baselines.getOrPut(view) { linkedMapOf() }[method] = baseline
-            if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) scopeTokens[view] = NotificationScope.token(view)
+            if (scene != null) scopeTokens[view] = scene.token
             if (name == "setMiBackgroundBlendColors") legacyBlends.remove(view)
         }
         val settings = settingsFor(view)
@@ -171,7 +199,7 @@ internal class ViewMaterialEngine(
             else -> baseline
         }
         if (name == "setMiGlass") synchronized(baselines) { arrayPairs[view] = (baseline[0] as FloatArray) to (output[0] as FloatArray) }
-        if (!sameArgs(input, output)) synchronized(baselines) { owned[view] = Ownership(view) }
+        if (recordOwnership && !sameArgs(input, output)) synchronized(baselines) { owned[view] = Ownership(view) }
         return output
     }
 
@@ -187,32 +215,41 @@ internal class ViewMaterialEngine(
             addBlend = View::class.java.getMethod("addMiBackgroundBlendColor", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             runtime.hook(clearBlend!!, "lite-glass:legacy-clear") { chain ->
                 val view = chain.thisObject as? View
-                if (view != null && GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, scopeAllows(view))
-                if (view != null && refreshing.get() != true && blendDispatch.get() != true) synchronized(baselines) {
-                    legacyBlends.remove(view)
-                    if (!scopeAllows(view)) owned.remove(view)
-                    baselines[view]?.keys?.removeAll { it.name == "setMiBackgroundBlendColors" }
+                if (view != null) prepare(view) { surface, _ ->
+                    val allowed = scopeAllows(view)
+                    if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
+                    if (refreshing.get() != true && blendDispatch.get() != true) synchronized(baselines) {
+                        legacyBlends.remove(view)
+                        if (!allowed) owned.remove(view)
+                        baselines[view]?.keys?.removeAll { it.name == "setMiBackgroundBlendColors" }
+                    }
                 }
                 chain.proceed()
             }
             runtime.hook(addBlend!!, "lite-glass:legacy-add") { chain ->
                 val view = chain.thisObject as? View ?: return@hook chain.proceed()
-                if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, scopeAllows(view))
-                if (bypassView.get() === view || blendDispatch.get() == true || !accepts(view)) return@hook chain.proceed()
-                if (!scopeAllows(view)) { forget(view); return@hook chain.proceed() }
-                val ticket = generation.value
-                val scene = if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) NotificationScope.token(view) else null
-                val color = chain.getArg(0) as Int
-                if (refreshing.get() != true) synchronized(baselines) {
-                    legacyBlends.getOrPut(view) { arrayListOf() }.add(Point(color, chain.getArg(1) as Int))
-                    if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION) scopeTokens[view] = NotificationScope.token(view)
-                }
-                val settings = settingsFor(view)
-                val tuned = softGlassColorAlpha(color, opacity(view, settings))
-                if (!generation.current(ticket, scopeAllows(view) && (scene == null || NotificationScope.isCurrent(view, scene)))) { forget(view); return@hook chain.proceed() }
-                val result = chain.proceedWith(view, arrayOf(tuned, chain.getArg(1)))
-                if (generation.current(ticket, scopeAllows(view) && (scene == null || NotificationScope.isCurrent(view, scene))))
-                    synchronized(baselines) { if (tuned != color || owned.containsKey(view)) owned[view] = Ownership(view) }
+                val prepared = prepare(view) { surface, scene ->
+                    val allowed = scopeAllows(view)
+                    if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
+                    if (bypassView.get() === view || blendDispatch.get() == true || !accepts(view)) return@prepare null
+                    if (!allowed) { forget(view); return@prepare null }
+                    val ticket = generation.value
+                    val parent = view.parent
+                    val color = chain.getArg(0) as Int
+                    val mode = chain.getArg(1)
+                    if (refreshing.get() != true) synchronized(baselines) {
+                        legacyBlends.getOrPut(view) { arrayListOf() }.add(Point(color, mode as Int))
+                        if (scene != null) scopeTokens[view] = scene.token
+                    }
+                    val settings = settingsFor(view)
+                    val tuned = softGlassColorAlpha(color, opacity(view, settings))
+                    Prepared(arrayOf(color, mode), arrayOf(tuned, mode), ticket, scene, parent)
+                } ?: return@hook chain.proceed()
+                if (!ready(view, prepared)) { forget(view); return@hook chain.proceed() }
+                val result = chain.proceedWith(view, prepared.args)
+                if (current(view, prepared))
+                    synchronized(baselines) { if (!sameArgs(prepared.input, prepared.args) || owned.containsKey(view)) owned[view] = Ownership(view) }
+                else forget(view)
                 result
             }
         }.onFailure { runtime.log("OEM legacy blend API unavailable", it) }
