@@ -1,5 +1,36 @@
 # Host validation
 
+## 0.1.0-preview3 compatibility candidate
+
+This is the Lite half of [HMC coexistence](HMC_COMPATIBILITY.md). The HMC
+compatibility work is separate; no fixed-version pair has passed device acceptance.
+
+- All 64 JVM tests passed: the previous 35 plus 11 settings/migration, nine
+  material-range/release, four scene/role and five animation-ownership checks.
+  They cover tuning off with unification on, explicit new values, legacy and
+  fresh configuration, first service binding, off/on and scene/role round trips,
+  interrupted release delivery, an enabled refresh cancelled by immediate disable,
+  newer writes and reentrant completion ordering.
+- Debug and R8-minified Release builds passed, including release lint-vital.
+  The delivered APK uses the existing debug signing identity and version code 3;
+  the unsigned Release output is retained only as a build check.
+- Canonical reset values now use the same validation/step quantization as export,
+  import and publication. The initial round-trip test exposed seven pre-existing
+  one-Float-ULP differences; exact canonical round trips pass after correction.
+- The native notification selector, media flow and controller contracts were
+  inspected in the actual SystemUI artifact. A read-only device version/hash
+  check confirmed the offline APK is identical. No GUI, screenshots, settings
+  changes, installation or scope reload was used for these checks.
+- Startup Java discovery/guard code is unchanged, and its eight regression tests
+  still pass. Host checks do not replace independent startup acceptance.
+- New `glass_media` and `notification_lockscreen_effects` defaults are false;
+  existing settings migrate to their former behavior. An upgrade alone does not
+  select the HMC coexistence configuration.
+
+Actual first unlock repaint, AOD deferral, fold-display changes, current media
+collector delivery and Folme channel cleanup remain device acceptance items.
+The local tests exercise pure decisions/lifecycles, not an ART/SystemUI instance.
+
 ## 0.1.0-preview2 candidate
 
 The candidate combines the Miuix settings App with the startup repair documented

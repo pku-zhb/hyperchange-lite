@@ -20,6 +20,13 @@ Preview 1 had a plugin-discovery startup regression. Preview 2 contains a guarde
 deferred discovery repair; read the [startup recovery boundary](design/STARTUP_SAFETY.md)
 before any device scope trial. Host verification does not establish device recovery.
 
+Preview 3 separates notification music material from ordinary notifications and
+adds an ordinary-lockscreen effects range. Fresh installs/reset disable both new
+ranges; upgrades preserve their old behavior until explicitly changed. Read
+[HMC coexistence](design/HMC_COMPATIBILITY.md) for the supported configurations,
+migration and paired acceptance boundary. The modules do not exchange settings
+or require a shared service.
+
 ## Build
 
 Requires JDK 21+, Android SDK/build tools 37 and libxposed API 102.
