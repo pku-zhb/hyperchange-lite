@@ -27,6 +27,12 @@ ranges; upgrades preserve their old behavior until explicitly changed. Read
 migration and paired acceptance boundary. The modules do not exchange settings
 or require a shared service.
 
+Preview 4 adds the six original HyperChanger material recipes under
+**柔光玻璃 → 材质预设**, with A/E shortcuts, a material-only trial restore and a
+contrast test background. Native-versus-schematic preview status is explicit;
+existing bound notifications can refresh on first tuning enable without waiting
+for a later OEM update. See [material comparisons](design/MATERIAL_PRESETS.md).
+
 ## Build
 
 Requires JDK 21+, Android SDK/build tools 37 and libxposed API 102.

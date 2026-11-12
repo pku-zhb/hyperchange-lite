@@ -1,5 +1,26 @@
 # Host validation
 
+## 0.1.0-preview4 material presets
+
+- All 73 JVM tests passed: the previous 64, five built-in recipe/backup checks and
+  four current-material refresh checks. Recipe IDs, names and all 18 numeric
+  values match the six upstream A-F fixtures. Profile application and the trial
+  backup are limited to 19 material keys, including the master toggle.
+- Debug and R8-minified Release builds passed, including release lint-vital.
+- A first-enable source defect was corrected: admitted ordinary notification and
+  media roots now come from existing OEM binders even if tuning was disabled
+  when their setters ran. Active feature/range checks and queue tokens still
+  apply; configuration/scene stamps deduplicate the two refresh entry paths.
+- The App preview now samples its own content using the established OEM local
+  path, reports required native-call success versus schematic fallback visibly,
+  and offers a vector contrast chart. Its status does not establish GPU raster
+  output or a loaded SystemUI hook.
+- The preset page's master toggle can compare tuned and untuned sample inputs.
+  Other preview pages retain their independent parameter-preview behavior.
+- Device access checked only the installed version before delivery; no GUI,
+  screenshots, settings changes, installation or scope reload were used for host
+  verification. Actual App/system A/E visual comparison is owner acceptance.
+
 ## 0.1.0-preview3 compatibility candidate
 
 This is the Lite half of [HMC coexistence](HMC_COMPATIBILITY.md). The HMC

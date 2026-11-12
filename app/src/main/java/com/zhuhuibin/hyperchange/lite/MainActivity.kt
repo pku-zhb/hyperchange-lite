@@ -86,6 +86,16 @@ class MainActivity : ComponentActivity() {
                     runCatching { repository.reset() }.fold(
                         { report("已恢复默认配置") }, { report("恢复失败：${it.message}") })
                 } },
+                onApplyGlassPreset = { preset -> io.execute {
+                    runCatching { repository.applyGlassPreset(preset) }.fold(
+                        { report("已应用${preset.title}；柔光调节已开启，作用范围保留") },
+                        { report("预设保存或同步失败：${it.message}") })
+                } },
+                onRestoreGlassPreset = { io.execute {
+                    runCatching { repository.restoreBeforeGlassPresets() }.fold(
+                        { report("已还原试用前的材质参数") },
+                        { report("还原或同步失败：${it.message}") })
+                } },
                 wallpaperUri = wallpaperUri, wallpaperStyle = wallpaperStyle,
                 onChooseImage = { backgroundPicker.launch(arrayOf("image/*")) },
                 onWallpaperStyle = { style ->

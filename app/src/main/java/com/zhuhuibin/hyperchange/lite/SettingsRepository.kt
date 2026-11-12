@@ -12,6 +12,7 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 
 const val PREFERENCE_GROUP = "hyperchange_lite"
+private const val GLASS_PRESET_UNDO = "_glass_preset_trial_undo_v1"
 
 /** The app owns its settings. Binding never replaces edits made while disconnected. */
 class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
@@ -113,6 +114,7 @@ class SettingsRepository(context: Context) {
     var onChange: (() -> Unit)? = null
     val connected: Boolean get() = app.service != null
     val syncFailed: Boolean get() = connected && app.syncFailed
+    val hasGlassPresetUndo: Boolean get() = preferences.contains(GLASS_PRESET_UNDO)
     private val observer: () -> Unit = { onChange?.invoke() }
 
     init {
@@ -129,20 +131,48 @@ class SettingsRepository(context: Context) {
         sync()
     }
 
-    fun reset() = applyValues(SettingsCodec.defaults(LiteCatalog.entries))
+    fun reset() = applyValues(SettingsCodec.defaults(LiteCatalog.entries), clearMaterialTrial = true)
+
+    /** Keep the first pre-trial snapshot while switching between built-in recipes. */
+    fun applyGlassPreset(preset: GlassPreset) = synchronized(app.settingsLock) {
+        require(preset.values.keys == glassPresetKeys) { "Invalid material preset" }
+        val specs = LiteCatalog.entries.filter { it.key in glassPresetKeys }
+        val values = specs.associate { it.key to it.validate(preset.values.getValue(it.key)) }
+        val edit = preferences.edit().putBoolean("_initialized", true)
+            .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+        if (!hasGlassPresetUndo) {
+            edit.putString(GLASS_PRESET_UNDO, SettingsCodec.encode(specs, preferences.all))
+        }
+        specs.forEach { put(edit, it, values.getValue(it.key)) }
+        check(edit.commit()) { "Could not save material preset" }
+        sync()
+    }
+
+    /** Restore material parameters only; never re-import compatibility scopes. */
+    fun restoreBeforeGlassPresets() = synchronized(app.settingsLock) {
+        val saved = preferences.getString(GLASS_PRESET_UNDO, null) ?: return@synchronized
+        val specs = LiteCatalog.entries.filter { it.key in glassPresetKeys }
+        val values = SettingsCodec.decode(specs, saved)
+        require(values.keys == glassPresetKeys) { "Invalid material backup" }
+        val edit = preferences.edit().remove(GLASS_PRESET_UNDO)
+        specs.forEach { put(edit, it, values.getValue(it.key)) }
+        check(edit.commit()) { "Could not restore material settings" }
+        sync()
+    }
 
     fun exportJson(): String = SettingsCodec.encode(LiteCatalog.entries, preferences.all)
 
     fun importJson(text: String): Int {
         val values = SettingsCodec.decode(LiteCatalog.entries, text)
-        applyValues(values)
+        applyValues(values, clearMaterialTrial = true)
         return values.size
     }
 
-    private fun applyValues(values: Map<String, Any>) = synchronized(app.settingsLock) {
+    private fun applyValues(values: Map<String, Any>, clearMaterialTrial: Boolean = false) = synchronized(app.settingsLock) {
         val edit = preferences.edit().putBoolean("_initialized", true)
             .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
         for (spec in LiteCatalog.entries) values[spec.key]?.let { put(edit, spec, it) }
+        if (clearMaterialTrial) edit.remove(GLASS_PRESET_UNDO)
         check(edit.commit()) { "Could not save settings" }
         sync()
     }
