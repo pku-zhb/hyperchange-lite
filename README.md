@@ -27,6 +27,12 @@ The script verifies the Harbor mount and places every build output and cache
 outside the source tree. For another environment, set `JAVA_HOME`, `ANDROID_HOME`
 and `LITE_BUILD_ROOT`, then use `./gradlew -I tools/gradle-init.gradle`.
 
+Before delivering a preview in the maintainer environment, run
+`python3 tools/archive-preview.py`. It checks the APK identity and signature,
+retains a versioned copy under `releases/local/`, and imports an identical copy
+into the owner's existing `02 Personal Files/Miduo` archive. Different builds
+cannot replace an archived version. Receipts remain local to the project.
+
 ## Preview status
 
 This is a source and host-validation preview. No phone installation or device
