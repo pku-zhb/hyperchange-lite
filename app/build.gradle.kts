@@ -1,112 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 btm_m
-
-import java.time.LocalDate
-
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
-
-val releaseStoreFile = providers.gradleProperty("releaseStoreFile").orNull
-val releaseStorePassword = providers.gradleProperty("releaseStorePassword").orNull
-val releaseKeyAlias = providers.gradleProperty("releaseKeyAlias").orNull
-val releaseKeyPassword = providers.gradleProperty("releaseKeyPassword").orNull
-val buildDate = LocalDate.now().toString().replace('-', '.')
-
 android {
-    namespace = "btm.m.os4.systemuihook"
+    namespace = "com.zhuhuibin.hyperchange.lite"
     compileSdk = 37
-    ndkVersion = "30.0.16248370"
-    ndkPath = rootProject.file(".build-tmp/android-ndk-r30").absolutePath
-
-
     defaultConfig {
-        applicationId = "btm.m.os4.systemuihook"
+        applicationId = "com.zhuhuibin.hyperchange.lite"
         minSdk = 35
         targetSdk = 37
-        versionCode = 1020239
-        versionName = "1.2.2"
-        buildConfigField("String", "BUILD_DATE", "\"$buildDate\"")
-        ndk { abiFilters += "arm64-v8a" }
-
+        versionCode = 1
+        versionName = "0.1.0-preview1"
     }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
-    signingConfigs {
-        create("release") {
-            if (releaseStoreFile != null) storeFile = file(releaseStoreFile)
-            storePassword = releaseStorePassword
-            keyAlias = releaseKeyAlias
-            keyPassword = releaseKeyPassword
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
-            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
         }
     }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-
-    packaging {
-        resources {
-            merges += "META-INF/xposed/*"
-            excludes += "**"
-        }
-    }
+    testOptions { unitTests.isReturnDefaultValues = true }
+    packaging { resources { merges += "META-INF/xposed/*" } }
 }
-
-androidComponents {
-    onVariants(selector().withBuildType("release")) { variant ->
-        // Compress DEX in the distributed APK; keep native libraries directly loadable.
-        variant.packaging.dex.useLegacyPackaging.set(true)
-    }
-}
-
 dependencies {
-    implementation("io.github.itoseo:coui:0.0.1-alpha8")
-    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
-    implementation("top.yukonga.miuix.kmp:miuix-preference-android:0.9.4")
-    implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4")
-    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.4")
-    implementation("io.github.kyant0:backdrop:2.0.0")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation("io.github.kyant0:shapes:1.2.0")
-    implementation("org.jetbrains.compose.ui:ui:1.11.0")
-    implementation("org.jetbrains.compose.foundation:foundation:1.11.0")
-    implementation("org.jetbrains.compose.animation:animation:1.11.0")
-    implementation("androidx.activity:activity-compose:1.12.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.graphics:graphics-shapes:1.1.0")
-    implementation("com.google.zxing:core:3.5.3")
-    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
-    implementation("org.luckypray:dexkit:2.2.0")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
-    implementation("io.github.proify.lyricon:subscriber:0.1.70")
-    implementation("com.mocharealm.accompanist:lyrics-core:0.4.7")
-    implementation("com.materialkolor:material-color-utilities:5.0.0")
-
     compileOnly("io.github.libxposed:api:102.0.0")
     implementation("io.github.libxposed:service:102.0.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

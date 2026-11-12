@@ -1,0 +1,9 @@
+def output = System.getenv('LITE_BUILD_ROOT')
+if (!output) throw new GradleException('Run tools/build.sh or set LITE_BUILD_ROOT explicitly.')
+allprojects { project ->
+    def suffix = project.path == ':' ? 'root' : project.path.substring(1).replace(':', '/')
+    project.layout.buildDirectory.set(new File(output, suffix))
+    project.plugins.withId('com.android.application') {
+        project.android.buildToolsVersion = '37.0.0'
+    }
+}

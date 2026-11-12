@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Adapted from HyperChanger surface classifiers; Lite removes call-stack ownership.
+package com.zhuhuibin.hyperchange.lite.glass
+
+import android.view.View
+
+internal enum class GlassSurface { NOTIFICATION, CONTROL_CENTER, VOLUME, SHADE }
+
+internal object GlassSurfaces {
+    private val shadeIds = setOf("shade_background", "notification_panel_background", "control_center_background")
+    private val volumeIds = setOf("blur_frame", "volume_column_slider", "volume_column_slider_bg_glass", "volume_column_slider_bg_blend")
+    private val mediaIds = setOf("media_bg", "media_background", "media_card_background")
+
+    fun id(view: View): String = if (view.id == View.NO_ID || view.id == 0) "" else
+        runCatching { view.resources.getResourceEntryName(view.id) }.getOrDefault("")
+
+    fun lineage(view: View): Sequence<View> = generateSequence(view) { it.parent as? View }
+
+    /** Unknown or module-owned views fail closed even inside a vendor material call. */
+    fun excluded(view: View): Boolean = lineage(view).any { candidate ->
+        val name = candidate.javaClass.name
+        val resource = id(candidate)
+        name.startsWith("com.zhuhuibin.") || name.startsWith("btm.m.") ||
+            name.contains("dynamicisland", true) || name.contains("mediaisland", true) ||
+            name.contains("TimeView") || name.contains("clock", true) ||
+            name.contains("MiuiKeyguardClock") || name.contains("NumPadKey") ||
+            resource in setOf("time_group", "clock", "clock_view", "keyguard_clock", "date_view")
+    }
+
+    fun classify(view: View): GlassSurface? {
+        if (excluded(view)) return null
+        val name = view.javaClass.name
+        val resource = id(view)
+        if (name.contains("NotificationBackgroundView") || (resource in mediaIds && media(view))) return GlassSurface.NOTIFICATION
+        if (resource in shadeIds || name.contains("ShadeBackground") || name.contains("NotificationPanelBackground") || name.contains("ControlCenterBackground")) return GlassSurface.SHADE
+        if (lineage(view).any { candidate ->
+                val n = candidate.javaClass.name
+                n == "com.android.systemui.miui.volume.VolumePanelView" ||
+                    n.endsWith("ExpandBlurFrameLayout") || n.endsWith("VolumeBlurFrameLayout") ||
+                    (id(candidate) in volumeIds && n.startsWith("android.").not())
+            }) return GlassSurface.VOLUME
+        // Limit control-center views by actual owner classes, never by an unrelated call stack.
+        if (lineage(view).any { it.javaClass.name.startsWith("miui.systemui.controlcenter.") }) return GlassSurface.CONTROL_CENTER
+        return null
+    }
+
+    fun isShadeWindow(view: View): Boolean = view.javaClass.name == "com.android.systemui.shade.NotificationShadeWindowView"
+
+    fun media(view: View): Boolean = lineage(view).any {
+        val name = it.javaClass.name
+        name.startsWith("com.android.systemui.") &&
+            (name.contains("mediacontrol", true) || name.contains("mediaheader", true) || name.contains("miuimedia", true) || name.contains("mediarow", true))
+    }
+
+    fun row(view: View): View? = lineage(view).firstOrNull { it.javaClass.name.contains("ExpandableNotificationRow") }
+
+    fun headsUp(view: View): Boolean = row(view)?.let { row ->
+        listOf("isHeadsUpState", "isHeadsUp").any { name ->
+            runCatching { row.javaClass.getMethod(name).invoke(row) == true }.getOrDefault(false)
+        }
+    } ?: false
+
+    fun focus(view: View): Boolean = row(view)?.let { row ->
+        runCatching {
+            val injector = row.javaClass.getMethod("getInjector").invoke(row) ?: return@runCatching false
+            injector.javaClass.getMethod("isFocusNotification").invoke(injector) == true
+        }.getOrDefault(false)
+    } ?: false
+}

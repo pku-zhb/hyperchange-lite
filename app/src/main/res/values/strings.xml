@@ -1,6 +1,1 @@
-<resources>
-    <string name="raster_wallpaper_description">光栅壁纸</string>
-    <string name="app_name">HyperChanger</string>
-    <!-- Shown as the module description in the LSPosed module list. -->
-    <string name="xposed_description" translatable="false">Shape HyperOS your way.</string>
-</resources>
+<resources><string name="app_name">HyperChange Lite</string></resources>

@@ -1,5 +1,5 @@
 minApiVersion=102
 targetApiVersion=102
 staticScope=true
-autoHotReload=true
-description=Shape HyperOS your way.
+autoHotReload=false
+description=Focused native glass and notification interactions for HyperOS.
