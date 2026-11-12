@@ -26,6 +26,11 @@ compatibility work is separate; no fixed-version pair has passed device acceptan
 - New `glass_media` and `notification_lockscreen_effects` defaults are false;
   existing settings migrate to their former behavior. An upgrade alone does not
   select the HMC coexistence configuration.
+- The signed debug APK was archived as `hyperchange-lite-0.1.0-preview3.apk` in
+  `releases/local/` and the owner's existing Miduo folder, then copied to the
+  phone's Download folder with matching SHA-256. The owner retains manual
+  installation and scope control. Transfer-only temporary files were removed;
+  all prior preview APKs remain intact.
 
 Actual first unlock repaint, AOD deferral, fold-display changes, current media
 collector delivery and Folme channel cleanup remain device acceptance items.
