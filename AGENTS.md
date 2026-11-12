@@ -42,3 +42,7 @@ ColdP/HyperChanger. Its package is `com.zhuhuibin.hyperchange.lite`.
   operate the GUI, or capture screenshots. All other phone access remains read-only.
   Tell the user that existing scope processes may still run the previous hooks until
   they choose to reload them. Later explicit user instructions can change this boundary.
+- If the owner takes over installation, copy the verified APK to `/sdcard/Download/`
+  and stop installation retries for that delivery. This handoff is currently active
+  for `0.1.0-preview1`; its ADB installation was rejected by the phone's installer.
+  Verify the downloaded file hash without opening the file manager or installer UI.
