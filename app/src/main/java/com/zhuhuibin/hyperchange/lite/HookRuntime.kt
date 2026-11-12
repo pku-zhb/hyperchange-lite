@@ -17,6 +17,11 @@ class HookRuntime(
     fun type(name: String): Class<*>? = runCatching { loader.loadClass(name) }.getOrNull()
 
     fun hook(method: Executable, id: String, callback: (XposedInterface.Chain) -> Any?) {
+        hookDirect(method, id) { callback(it) }
+    }
+
+    /** Infrastructure hooks can avoid invoking a Kotlin Function1 in their callback. */
+    fun hookDirect(method: Executable, id: String, hooker: XposedInterface.Hooker) {
         val key = method to id
         if (!installed.add(key)) return
         try {
@@ -24,7 +29,7 @@ class HookRuntime(
             runCatching { module.deoptimize(method) }
             module.hook(method).setId("lite:$id")
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                .intercept { callback(it) }
+                .intercept(hooker)
         } catch (error: Throwable) {
             installed.remove(key)
             log("Unavailable hook: $id", error)

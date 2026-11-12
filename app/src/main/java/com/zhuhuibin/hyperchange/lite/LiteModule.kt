@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package com.zhuhuibin.hyperchange.lite
 
+import android.os.Handler
+import android.os.Looper
 import com.zhuhuibin.hyperchange.lite.glass.GlassHooks
+import com.zhuhuibin.hyperchange.lite.loader.MainThreadPluginScheduler
+import com.zhuhuibin.hyperchange.lite.loader.PluginClassLoaderDiscovery
 import com.zhuhuibin.hyperchange.lite.notifications.NotificationEffects
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
@@ -9,7 +13,6 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 /** The sole entry point; no framework, launcher, wallpaper or HMC module is loaded. */
 class LiteModule : XposedModule() {
     private val dispatched = mutableSetOf<Pair<String, ClassLoader>>()
-    private val installing = ThreadLocal<Boolean>()
     private val glasses = GlassHooks
     private val controls = ControlVolumeHooks()
     private val notifications = NotificationEffects()
@@ -37,24 +40,25 @@ class LiteModule : XposedModule() {
 
     private fun discoverPlugin(loader: ClassLoader) {
         val runtime = HookRuntime(this, loader, getRemotePreferences(PREFERENCE_GROUP), "com.android.systemui")
-        // HyperOS loads its Control Center outside the application's ClassLoader. Match
-        // only plugin namespace loads; never inspect stack traces for unrelated apps.
-        ClassLoader::class.java.declaredMethods.filter {
-            it.name == "loadClass" && it.parameterTypes.firstOrNull() == String::class.java
-        }.forEach { method ->
-            runtime.hook(method, "plugin-discovery:${method.parameterCount}") { chain ->
-                val loaded = chain.proceed()
-                val name = chain.getArg(0) as? String
-                if (installing.get() != true && name != null &&
-                    (name.startsWith("miui.systemui.controlcenter.") || name.startsWith("com.android.systemui.miui.volume.")) && loaded is Class<*>) {
-                    loaded.classLoader?.let { pluginLoader ->
-                        installing.set(true)
-                        try { dispatch("miui.systemui.plugin", pluginLoader) }
-                        finally { installing.remove() }
-                    }
+        // Construct the Java callback and its scheduler before enabling either global
+        // hook. Kotlin adapter installation happens later, outside the loading callback.
+        val discovery = PluginClassLoaderDiscovery(
+            MainThreadPluginScheduler(Handler(Looper.getMainLooper())),
+            object : PluginClassLoaderDiscovery.Listener {
+                override fun onDiscovered(pluginLoader: ClassLoader) {
+                    runtime.log("Plugin loader discovered; installing adapters on the main queue")
+                    dispatch("miui.systemui.plugin", pluginLoader)
                 }
-                loaded
-            }
+                override fun onFailure(error: Throwable) {
+                    runtime.log("Plugin adapter installation failed; no automatic retry for this loader", error)
+                }
+            },
+        )
+        ClassLoader::class.java.declaredMethods.filter {
+            it.name == "loadClass" && (it.parameterTypes.contentEquals(arrayOf(String::class.java)) ||
+                it.parameterTypes.contentEquals(arrayOf(String::class.java, Boolean::class.javaPrimitiveType)))
+        }.forEach { method ->
+            runtime.hookDirect(method, "plugin-discovery:${method.parameterCount}", discovery)
         }
     }
 
