@@ -2,27 +2,51 @@
 package com.zhuhuibin.hyperchange.lite.controls
 
 import android.content.SharedPreferences
+import android.graphics.Matrix
+import android.graphics.RectF
 import android.os.SystemClock
+import android.util.DisplayMetrics
 import android.view.MotionEvent
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.readField
 import java.lang.ref.WeakReference
 
 /** Owns only one column's visual layers, never the native volume gesture listener. */
-internal class VolumeAnimator(owner: Any, private val preferences: SharedPreferences) : Runnable {
+internal class VolumeAnimator(
+    owner: Any,
+    private val preferences: SharedPreferences,
+    private val onPhaseChanged: () -> Unit,
+) : Runnable {
     private val column = WeakReference(readField(owner, "view") as? View)
     private val parts = listOf("slider", "progressView", "progressViewBg").mapNotNull {
         (readField(owner, it) as? View)?.let(::WeakReference)
     }
     private val slider = WeakReference(readField(owner, "slider") as? View)
     private val icon = WeakReference(readField(owner, "icon") as? View)
-    private var normalWidths = parts.map { it.get()?.layoutParams?.width ?: 0 }
+    private val widthBaseline = VolumeWidthBaseline()
+    private val normalWidths get() = widthBaseline.widths
     private var iconAlpha = icon.get()?.alpha ?: 1f
     private var baseX = column.get()?.translationX ?: 0f
     private var baseY = column.get()?.translationY ?: 0f
     private var baseScaleX = column.get()?.scaleX ?: 1f
     private var baseScaleY = column.get()?.scaleY ?: 1f
-    private val width = VolumeSpring(normalWidths.firstOrNull()?.toFloat() ?: 0f)
+    private var baseMatrix = Matrix(column.get()?.matrix ?: Matrix())
+    private var edgeGap = VolumePlacementModel.DEFAULT_EDGE_GAP
+    private var screenRightPx = 0f
+    private var rootWidth = 0
+    private var rootHeight = 0
+    private var displayId = -1
+    private var placementDirty = true
+    private var edgeTranslation = 0f
+    private val screenMetrics = DisplayMetrics()
+    private val screenOrigin = IntArray(2)
+    private val trackToColumn = Matrix()
+    private val placementStep = Matrix()
+    private val placementCombined = Matrix()
+    private val nativeToRoot = Matrix()
+    private val trackBounds = RectF()
+    private var interaction = VolumeInteractionState()
+    private val width = VolumeSpring(parts.firstOrNull()?.get()?.layoutParams?.width?.toFloat() ?: 0f)
     private val pop = VolumeSpring(1f)
     private val nudge = VolumeSpring(0f)
     private val dragX = VolumeSpring(0f)
@@ -40,7 +64,12 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
     private var returnAt = 0L
     private var scheduled = false
     private var owns = false
-    private var touching = false
+    private val touching get() = interaction.touching
+    val narrow: Boolean get() = owns && interaction.visible && interaction.narrow
+    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        placementDirty = true
+        if (owns) schedule()
+    }
     private val attachListener = object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(v: View) = Unit
         override fun onViewDetachedFromWindow(v: View) { restore() }
@@ -48,6 +77,7 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
 
     init {
         column.get()?.addOnAttachStateChangeListener(attachListener)
+        parts.forEach { it.get()?.addOnLayoutChangeListener(layoutListener) }
     }
 
     fun matches(view: View) = slider.get() === view
@@ -96,12 +126,14 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
         val view = column.get() ?: return false
         if (!enabled() || !view.isAttachedToWindow || parts.size != 3) return false
         if (!owns) {
-            normalWidths = parts.map { it.get()?.layoutParams?.width ?: 0 }
-            if (normalWidths.any { it <= 0 }) return false
+            if (!widthBaseline.acquire(parts.map { it.get()?.layoutParams?.width ?: 0 })) return false
             baseX = view.translationX; baseY = view.translationY; baseScaleX = view.scaleX; baseScaleY = view.scaleY
+            baseMatrix = Matrix(view.matrix)
+            placementDirty = true
             iconAlpha = icon.get()?.alpha ?: 1f
             width.snap(normalWidths[0].toFloat()); pop.snap(1f); nudge.snap(0f)
             dragX.snap(0f); dragY.snap(0f); stretchX.snap(1f); stretchY.snap(1f)
+            readPlacement()
             owns = true
         }
         return true
@@ -109,24 +141,30 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
 
     fun refresh() {
         if (!enabled()) { restore(); return }
+        readPlacement()
+        if (!interaction.visible) return
         if (!acquire()) return
-        targetWidth(if (touching) normalWidths[0].toFloat() else thin())
+        targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
     }
 
     fun show() {
         if (!acquire()) return
-        touching = false
-        pop.snap(0f)
-        val (k, d) = VolumeMotionModel.popCoefficients(number("volume_pop_duration", 1000f), number("volume_pop_damping", 1f))
-        pop.target(1f, k, d)
-        targetWidth(thin())
+        readPlacement()
+        val firstShow = !interaction.visible
+        transition(VolumeInteractionEvent.SHOW)
+        if (firstShow) {
+            pop.snap(0f)
+            val (k, d) = VolumeMotionModel.popCoefficients(number("volume_pop_duration", 1000f), number("volume_pop_damping", 1f))
+            pop.target(1f, k, d)
+        }
+        targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
     }
 
     fun touch(event: MotionEvent) {
         if (!acquire()) return
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                touching = true
+                transition(VolumeInteractionEvent.TOUCH_DOWN)
                 downX = event.rawX; downY = event.rawY; lastX = downX; lastY = downY
                 velocityX = 0f; velocityY = 0f; lastMotionTime = event.eventTime
                 targetWidth(normalWidths[0].toFloat())
@@ -145,7 +183,7 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
                 val releaseMomentum = event.actionMasked == MotionEvent.ACTION_UP && touching
-                touching = false
+                transition(if (releaseMomentum) VolumeInteractionEvent.TOUCH_UP else VolumeInteractionEvent.TOUCH_CANCEL)
                 // Cancellation must not inject release momentum from a lost pointer.
                 if (releaseMomentum) {
                     dragX.seedVelocity(velocityX * .45f); dragY.seedVelocity(velocityY * .45f)
@@ -153,18 +191,87 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
                 velocityX = 0f; velocityY = 0f
                 dragX.target(0f, 380f, 28f); dragY.target(0f, 380f, 28f)
                 stretchX.target(1f, 380f, 28f); stretchY.target(1f, 380f, 28f)
-                targetWidth(thin())
+                targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
             }
         }
     }
 
     fun nudge() {
+        // The key that opens the native panel can arrive before its show callback.
+        // Its show starts wide; subsequent key animations narrow that live session.
+        if (!interaction.visible) return
         if (!acquire()) return
+        transition(VolumeInteractionEvent.HARDWARE_KEY)
+        targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
         val (k, d) = VolumeMotionModel.nudgeCoefficients(number("volume_nudge_response", .8f), number("volume_nudge_damping", .9f))
         val density = column.get()?.resources?.displayMetrics?.density ?: 1f
         nudge.target(-number("volume_nudge", 6.5f) * density, k, d)
         returnAt = SystemClock.uptimeMillis() + 100L
         schedule()
+    }
+
+    private fun transition(event: VolumeInteractionEvent) {
+        val next = VolumeInteractionModel.transition(interaction, event)
+        if (interaction == next) return
+        interaction = next
+        onPhaseChanged()
+    }
+
+    private fun readPlacement() {
+        edgeGap = VolumePlacementModel.resolveEdgeGap(
+            if (preferences.contains("volume_edge_gap")) number("volume_edge_gap", 6f) else null,
+            if (preferences.contains("volume_offset_x")) number("volume_offset_x", 0f) else null,
+        )
+        placementDirty = true
+        column.get()?.let(::readScreenBounds)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun readScreenBounds(view: View) {
+        val root = view.rootView
+        val currentDisplayId = view.display?.displayId ?: -1
+        if (screenRightPx > 0f && root.width == rootWidth && root.height == rootHeight && currentDisplayId == displayId) return
+        rootWidth = root.width
+        rootHeight = root.height
+        displayId = currentDisplayId
+        view.display?.getRealMetrics(screenMetrics)
+        screenRightPx = (screenMetrics.widthPixels.takeIf { it > 0 } ?: view.resources.displayMetrics.widthPixels).toFloat()
+        placementDirty = true
+    }
+
+    /** Recalculate resting geometry only after layout; per-frame motion uses this cache. */
+    private fun placementTranslation(view: View): Float {
+        val track = slider.get() ?: return 0f
+        if (track.width <= 0) return 0f
+        readScreenBounds(view)
+        if (placementDirty) {
+            trackToColumn.reset()
+            var child = track
+            while (child !== view) {
+                val parent = child.parent as? View ?: return 0f
+                placementStep.set(child.matrix)
+                placementStep.postTranslate((child.left - parent.scrollX).toFloat(), (child.top - parent.scrollY).toFloat())
+                placementCombined.setConcat(placementStep, trackToColumn)
+                trackToColumn.set(placementCombined)
+                child = parent
+            }
+            nativeToRoot.set(baseMatrix)
+            nativeToRoot.preConcat(trackToColumn)
+            val root = view.rootView
+            child = view
+            while (child !== root) {
+                val parent = child.parent as? View ?: return 0f
+                nativeToRoot.postTranslate((child.left - parent.scrollX).toFloat(), (child.top - parent.scrollY).toFloat())
+                child = parent
+            }
+            trackBounds.set(0f, 0f, track.width.toFloat(), track.height.toFloat())
+            nativeToRoot.mapRect(trackBounds)
+            // Resting ancestor positions preserve OEM panel show/hide transforms.
+            root.getLocationOnScreen(screenOrigin)
+            edgeTranslation = VolumePlacementModel.edgeTranslation(screenRightPx, trackBounds.right + screenOrigin[0], edgeGap)
+            placementDirty = false
+        }
+        return edgeTranslation * VolumePlacementModel.narrowFraction(track.width.toFloat(), thin(), normalWidths[0].toFloat())
     }
 
     private fun targetWidth(value: Float) {
@@ -201,22 +308,28 @@ internal class VolumeAnimator(owner: Any, private val preferences: SharedPrefere
         val transform = VolumeMotionModel.popTransform(pop.value, number("volume_pop_scale", .2f), number("volume_pop_shift", 5.5f) * density, number("volume_pop_power", 3f))
         view.scaleX = baseScaleX * transform.scale * stretchX.value
         view.scaleY = baseScaleY * transform.scale * stretchY.value
-        view.translationX = baseX + nudge.value + transform.x + dragX.value
+        view.translationX = baseX + placementTranslation(view) + nudge.value + transform.x + dragX.value
         view.translationY = baseY + transform.y + dragY.value
         if (moving || returnAt != 0L) view.postOnAnimation(this) else scheduled = false
     }
 
     fun restore() {
         column.get()?.removeCallbacks(this)
-        scheduled = false; returnAt = 0L; touching = false
+        scheduled = false; returnAt = 0L
+        transition(VolumeInteractionEvent.HIDE)
         if (!owns) return
+        val originalWidths = widthBaseline.release() ?: return
         parts.forEachIndexed { i, weak -> weak.get()?.let { part ->
-            part.layoutParams?.let { params -> params.width = normalWidths[i]; part.layoutParams = params }
+            part.layoutParams?.let { params -> params.width = originalWidths[i]; part.layoutParams = params }
         } }
         column.get()?.let { it.translationX = baseX; it.translationY = baseY; it.scaleX = baseScaleX; it.scaleY = baseScaleY }
         icon.get()?.alpha = iconAlpha
         owns = false
     }
 
-    fun dispose() { restore(); column.get()?.removeOnAttachStateChangeListener(attachListener) }
+    fun dispose() {
+        restore()
+        column.get()?.removeOnAttachStateChangeListener(attachListener)
+        parts.forEach { it.get()?.removeOnLayoutChangeListener(layoutListener) }
+    }
 }

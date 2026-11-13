@@ -98,12 +98,14 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
 private fun migrateLocal(preferences: SharedPreferences) {
     val original = preferences.all
     val resolved = SettingsMigration.resolve(original)
-    val keys = listOf(SettingsMigration.MEDIA_KEY, SettingsMigration.LOCKSCREEN_KEY, SettingsMigration.VERSION_KEY)
+    val keys = listOf(SettingsMigration.MEDIA_KEY, SettingsMigration.LOCKSCREEN_KEY,
+        SettingsMigration.EDGE_GAP_KEY, SettingsMigration.VERSION_KEY)
     val ownsLocalState = SettingsMigration.hasLocalState(original)
     if (keys.all { original[it] == resolved[it] } && (!ownsLocalState || original["_initialized"] == true)) return
     val edit = preferences.edit()
         .putBoolean(SettingsMigration.MEDIA_KEY, resolved[SettingsMigration.MEDIA_KEY] as Boolean)
         .putBoolean(SettingsMigration.LOCKSCREEN_KEY, resolved[SettingsMigration.LOCKSCREEN_KEY] as Boolean)
+        .putFloat(SettingsMigration.EDGE_GAP_KEY, resolved[SettingsMigration.EDGE_GAP_KEY] as Float)
         .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
     if (ownsLocalState) edit.putBoolean("_initialized", true)
     check(edit.commit()) { "Could not migrate settings" }
@@ -223,7 +225,21 @@ object SettingsCodec {
         val settings = root.getJSONObject("settings")
         val validated = buildMap {
             specs.forEach { spec -> if (settings.has(spec.key)) put(spec.key, spec.validate(settings.get(spec.key))) }
+            if (specs.any { it.key == SettingsMigration.EDGE_GAP_KEY } &&
+                !settings.has(SettingsMigration.EDGE_GAP_KEY) && settings.has(SettingsMigration.LEGACY_VOLUME_OFFSET_KEY)) {
+                val raw = settings.get(SettingsMigration.LEGACY_VOLUME_OFFSET_KEY)
+                require(raw is Number) { "Invalid number: ${SettingsMigration.LEGACY_VOLUME_OFFSET_KEY}" }
+                val offset = raw.toDouble()
+                require(offset.isFinite() && offset in -50.0..50.0) {
+                    "Out of range: ${SettingsMigration.LEGACY_VOLUME_OFFSET_KEY}"
+                }
+                // Keep the validated alias through migration so old partial presets retain
+                // their former combined-scope defaults; forPreset removes the alias.
+                put(SettingsMigration.LEGACY_VOLUME_OFFSET_KEY, offset.toFloat())
+            }
         }
-        return SettingsMigration.forPreset(specs, validated)
+        return SettingsMigration.forPreset(specs, validated).mapValues { (key, value) ->
+            specs.first { it.key == key }.validate(value)
+        }
     }
 }

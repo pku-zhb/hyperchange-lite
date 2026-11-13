@@ -29,7 +29,7 @@ internal val LiteSetting.sliderRange: ClosedFloatingPointRange<Float>
             key == "volume_corner" || key == "volume_timer_corner" -> 16f..56f
             key == "volume_thin_width" -> 6f..18f
             key == "volume_height" -> 120f..200f
-            key == "volume_offset_x" -> -16f..16f
+            key == "volume_edge_gap" -> 0f..32f
             key == "volume_offset_y" -> -40f..40f
             key == "volume_motion_duration" -> 180f..900f
             key == "volume_nudge" -> 0f..12f
@@ -48,7 +48,7 @@ internal val LiteSetting.valueUnit: String
         isToggle -> ""
         key.startsWith("glass_") -> "%"
         key.endsWith("_duration") || key.endsWith("_delay") -> "ms"
-        key == "volume_offset_x" || key == "volume_offset_y" -> "px"
+        key == "volume_edge_gap" || key == "volume_offset_y" -> "px"
         key.endsWith("_radius") || key == "volume_corner" || key == "volume_timer_corner" ||
             key == "volume_thin_width" || key == "volume_height" || key == "volume_nudge" ||
             key == "volume_pop_shift" || key == "notification_group_stack_spacing" -> "dp"

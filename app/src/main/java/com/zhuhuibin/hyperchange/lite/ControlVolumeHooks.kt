@@ -129,8 +129,10 @@ class ControlVolumeHooks {
 
     private fun installVolumeRadius(runtime: HookRuntime, simpleName: String, switch: String, key: String) {
         val type = runtime.type("com.android.systemui.miui.volume.$simpleName") ?: return
+        val signature = if (simpleName == "TimerItemRes") arrayOf(Context::class.java, Boolean::class.javaPrimitiveType)
+            else arrayOf(Context::class.java, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
         type.declaredMethods.filter {
-            it.name == "getRadius" && it.parameterTypes.firstOrNull() == Context::class.java &&
+            it.name == "getRadius" && it.parameterTypes.contentEquals(signature) &&
                 it.returnType in setOf(Int::class.javaPrimitiveType, Float::class.javaPrimitiveType)
         }.forEach { method ->
             runtime.hook(method, "volume-radius:$simpleName:${method.parameterCount}") { chain ->
@@ -194,22 +196,18 @@ class ControlVolumeHooks {
     private fun installVolume(runtime: HookRuntime) {
         val prefix = "com.android.systemui.miui.volume."
         runtime.type(prefix + "MiuiVolumeDialogRes")?.declaredMethods?.filter { method ->
-            method.returnType == Int::class.javaPrimitiveType && when (method.name) {
-                "getMarginRight" -> method.parameterTypes.contentEquals(arrayOf(Context::class.java,
-                    Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType))
-                "getMarginTop" -> method.parameterTypes.contentEquals(arrayOf(Context::class.java,
+            method.returnType == Int::class.javaPrimitiveType && method.name == "getMarginTop" &&
+                method.parameterTypes.contentEquals(arrayOf(Context::class.java,
                     Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType,
                     Int::class.javaPrimitiveType, Int::class.javaPrimitiveType))
-                else -> false
-            }
         }?.forEach { method ->
             runtime.hook(method, "volume-margin:${method.name}") { chain ->
                 val original = chain.proceed()
                 if (!runtime.preferences.getBoolean("volume_motion_enabled", false)) original
                 else {
-                    // HyperLight offsets are integer physical pixels applied to OEM margins.
-                    val key = if (method.name == "getMarginRight") "volume_offset_x" else "volume_offset_y"
-                    (original as Int) + number(key, 0f).toInt()
+                    // Keep the source's vertical OEM margin offset. Horizontal
+                    // placement instead measures the visible track's screen edge.
+                    (original as Int) + number("volume_offset_y", 0f).toInt()
                 }
             }
         }
@@ -234,7 +232,9 @@ class ControlVolumeHooks {
                     columns.remove(chain.thisObject)?.dispose()
                     val result = chain.proceed()
                     chain.thisObject?.let { owner ->
-                        columns[owner] = VolumeAnimator(owner, runtime.preferences)
+                        columns[owner] = VolumeAnimator(owner, runtime.preferences) {
+                            (readField(owner, "view") as? View)?.let(::panelFor)?.let { updatePanel(it, false) }
+                        }
                     }
                     result
                 }
@@ -273,7 +273,7 @@ class ControlVolumeHooks {
                 val result = chain.proceed()
                 affected.forEach { animator -> when (method.name) {
                     "showVolumePanelAnimation" -> animator.show()
-                    "collapsedVolumePanelAnimation" -> main.post { animator.refresh() }
+                    "collapsedVolumePanelAnimation" -> main.post { animator.show() }
                 } }
                 result
             }
@@ -284,8 +284,10 @@ class ControlVolumeHooks {
         val p = preferences ?: return
         val expanded = runCatching { panel.javaClass.getMethod("isExpanded").invoke(panel) as Boolean }.getOrDefault(true)
         val isControlCenter = readField(panel, "isControlCenterPanel") != false
+        val narrow = p.getBoolean("volume_motion_enabled", false) &&
+            columns.values.toList().any { it.belongsToPanel(panel) && it.narrow }
         val hideRinger = VolumePanelAppearance.hideRinger(isControlCenter, expanded,
-            p.getBoolean("volume_motion_enabled", false), p.getBoolean("volume_hide_ringer", false))
+            narrow, p.getBoolean("volume_hide_ringer", false))
         val hideExpand = VolumePanelAppearance.hideExpand(isControlCenter, expanded,
             p.getBoolean("volume_long_press", false))
         for ((field, hide) in listOf("mRingerModeLayout" to hideRinger, "mExpandButton" to hideExpand)) {

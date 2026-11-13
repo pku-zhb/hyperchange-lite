@@ -36,7 +36,7 @@ class FeatureCatalogTest {
         val behaviorKeys = setOf(
             "notification_heads_up_pop_blur", "notification_stack_anim_add_alpha",
             "notification_press_tilt_enabled", "notification_group_stack_enabled",
-            "volume_motion_enabled", "volume_long_press", "volume_height", "volume_offset_x",
+            "volume_motion_enabled", "volume_long_press", "volume_height", "volume_edge_gap",
         )
         val behaviorSettings = LiteCatalog.entries.filter { it.key in behaviorKeys }
         assertEquals(behaviorKeys, behaviorSettings.map { it.key }.toSet())

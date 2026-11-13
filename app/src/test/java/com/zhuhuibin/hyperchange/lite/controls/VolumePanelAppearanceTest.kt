@@ -21,6 +21,22 @@ class VolumePanelAppearanceTest {
         assertTrue(VolumePanelAppearance.hideExpand(false, false, longPress = true))
     }
 
+    @Test fun automaticFooterFollowsTheCurrentSessionPhase() {
+        var state = VolumeInteractionState()
+        for ((event, hidden) in listOf(
+            VolumeInteractionEvent.SHOW to false,
+            VolumeInteractionEvent.HARDWARE_KEY to true,
+            VolumeInteractionEvent.TOUCH_DOWN to false,
+            VolumeInteractionEvent.TOUCH_CANCEL to true,
+            VolumeInteractionEvent.HIDE to false,
+            VolumeInteractionEvent.SHOW to false,
+        )) {
+            state = VolumeInteractionModel.transition(state, event)
+            assertEquals(hidden, VolumePanelAppearance.hideRinger(false, false, state.narrow, explicitHide = false))
+            assertTrue(VolumePanelAppearance.hideRinger(false, false, state.narrow, explicitHide = true))
+        }
+    }
+
     @Test fun repeatedRefreshPreservesTheNativeVisibilityForDisable() {
         val visibility = VolumeButtonVisibility()
         assertEquals(8, visibility.resolve(0, hide = true, nativeUpdated = true, hidden = 8))

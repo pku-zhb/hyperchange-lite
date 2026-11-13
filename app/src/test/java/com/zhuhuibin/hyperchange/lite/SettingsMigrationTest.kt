@@ -7,6 +7,8 @@ import org.junit.Test
 class SettingsMigrationTest {
     private val media = SettingsMigration.MEDIA_KEY
     private val lockscreen = SettingsMigration.LOCKSCREEN_KEY
+    private val edge = SettingsMigration.EDGE_GAP_KEY
+    private val offset = SettingsMigration.LEGACY_VOLUME_OFFSET_KEY
     private val marker = SettingsMigration.VERSION_KEY
 
     private fun assertRanges(values: Map<String, *>, music: Boolean, locked: Boolean) {
@@ -16,6 +18,7 @@ class SettingsMigrationTest {
 
     @Test fun freshStorageAndUnrelatedMetadataKeepConservativeDefaults() {
         assertRanges(SettingsMigration.resolve(emptyMap<String, Any>()), false, false)
+        assertEquals(6f, SettingsMigration.resolve(emptyMap<String, Any>())[edge])
         assertRanges(SettingsMigration.resolve(mapOf("_initialized" to false, "unknown" to true)), false, false)
         assertFalse(SettingsMigration.hasLocalState(emptyMap<String, Any>()))
     }
@@ -41,7 +44,7 @@ class SettingsMigrationTest {
             val once = SettingsMigration.resolve(original)
             assertRanges(once, music, locked)
             assertEquals(once, SettingsMigration.resolve(once))
-            assertEquals(original.keys + marker, once.keys)
+            assertEquals(original.keys + setOf(marker, edge), once.keys)
         }
     }
 
@@ -64,6 +67,41 @@ class SettingsMigrationTest {
         assertRanges(restored, false, true)
         assertEquals(true, restored["notification_press_tilt_enabled"])
         assertRanges(SettingsMigration.forBinding(freshLocal, emptyMap<String, Any>()), false, false)
+    }
+
+    @Test fun preparedFreshPositionDefaultDoesNotHideRemotePositionOnFirstBinding() {
+        val freshLocal = SettingsMigration.resolve(emptyMap<String, Any>())
+        assertEquals(6f, freshLocal[edge])
+        assertFalse(SettingsMigration.hasLocalState(freshLocal))
+        val restored = SettingsMigration.forBinding(freshLocal, mapOf(edge to 27f))
+        assertEquals(27f, restored[edge])
+        assertEquals(22f, SettingsMigration.forBinding(freshLocal, mapOf(offset to 16f))[edge])
+    }
+
+    @Test fun legacyOffsetAloneOwnsLocalStateAndMigratesEvenWithTheExistingMarker() {
+        val remote = mapOf(edge to 90f)
+        for ((legacy, expected) in listOf(-50f to 0f, 0f to 6f, 50f to 56f)) {
+            val old = mapOf(offset to legacy)
+            assertTrue(SettingsMigration.hasLocalState(old))
+            val resolved = SettingsMigration.resolve(old)
+            assertEquals(expected, resolved[edge])
+            assertTrue(SettingsMigration.hasLocalState(resolved))
+            assertEquals(expected, SettingsMigration.forBinding(old, remote)[edge])
+            assertRanges(resolved, true, true)
+            assertEquals(expected, SettingsMigration.resolve(old + (marker to 1))[edge])
+        }
+    }
+
+    @Test fun explicitEdgeGapWinsOverLegacyOffsetAndResolutionIsIdempotent() {
+        for (gap in listOf(0f, 27f, 200f)) {
+            val resolved = SettingsMigration.resolve(mapOf(edge to gap, offset to 50f))
+            assertEquals(gap, resolved[edge])
+            assertEquals(resolved, SettingsMigration.resolve(resolved))
+        }
+        assertEquals(200f, SettingsMigration.resolve(mapOf(offset to 300f))[edge])
+        assertEquals(6f, SettingsMigration.resolve(mapOf(edge to Float.NaN, offset to 20f))[edge])
+        assertEquals(6f, SettingsMigration.resolve(mapOf(edge to "invalid", offset to 20f))[edge])
+        assertEquals(1, SettingsMigration.VERSION)
     }
 
     @Test fun existingLocalOrOfflineEditsWinOverRemoteOnBinding() {

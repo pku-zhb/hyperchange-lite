@@ -27,7 +27,18 @@ class SettingValuePresentationTest {
         assertEquals(-30f..30f, spec.sliderRange)
         assertEquals(1f, spec.validate(spec.step))
         assertEquals("%", spec.valueUnit)
-        assertEquals("px", LiteCatalog.entries.first { it.key == "volume_offset_x" }.valueUnit)
+        assertEquals("px", LiteCatalog.entries.first { it.key == "volume_edge_gap" }.valueUnit)
         assertEquals("dp", LiteCatalog.entries.first { it.key == "volume_thin_width" }.valueUnit)
+    }
+
+    @Test fun edgeGapUsesASmallPixelSliderWithoutLimitingImportedPositions() {
+        val spec = LiteCatalog.entries.first { it.key == "volume_edge_gap" }
+        assertEquals(0f..32f, spec.sliderRange)
+        assertEquals("px", spec.valueUnit)
+        assertEquals(6f, spec.defaultValue)
+        assertEquals(0f, spec.min, 0f)
+        assertEquals(200f, spec.max, 0f)
+        assertEquals(200f, SettingsCodec.decode(listOf(spec),
+            SettingsCodec.encode(listOf(spec), mapOf(spec.key to 200f)))[spec.key])
     }
 }
