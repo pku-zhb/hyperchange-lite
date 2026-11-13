@@ -7,6 +7,7 @@ import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.sinh
 import kotlin.math.sqrt
+import kotlin.math.pow
 
 /** Independent behavioral reconstruction; shared by system hooks and local previews. */
 object NotificationMotion {
@@ -52,7 +53,7 @@ object NotificationMotion {
 
     fun group(index: Int, spacingDp: Float, scaleStep: Float): GroupFrame {
         val i = index.coerceIn(0, 2)
-        return GroupFrame(i * spacingDp.coerceIn(0f, 32f), 1f - i * (1f - scaleStep.coerceIn(.5f, 1f)))
+        return GroupFrame(i * spacingDp.coerceIn(0f, 32f), scaleStep.coerceIn(.5f, 1f).pow(i))
     }
 
     /** Horizontal dismissal retains ownership from the first meaningful motion. */

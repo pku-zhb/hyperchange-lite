@@ -21,7 +21,11 @@ internal class NotificationGroupStack {
     private lateinit var prefs: SharedPreferences
     private lateinit var schema: Schema
     private val sessions = WeakHashMap<View, Session>()
-    private data class Measurement(val owned: OwnedValue<Int>, val token: com.zhuhuibin.hyperchange.lite.scope.NotificationScopeToken, val revision: Long)
+    private data class Measurement(
+        val owned: OwnedValue<Int>, val dimension: OwnedValue<Int>,
+        val members: GroupStackMembership<View>,
+        val token: com.zhuhuibin.hyperchange.lite.scope.NotificationScopeToken, val revision: Long,
+    )
     private val measurements = WeakHashMap<View, Measurement>()
     @Volatile private var configurationRevision = 0L
     private var listener: SharedPreferences.OnSharedPreferenceChangeListener? = null
@@ -48,10 +52,13 @@ internal class NotificationGroupStack {
         container.declaredMethods.filter { it.name == "updateState" && it.parameterCount == 1 }.forEach { method ->
             runtime.hook(method, "notification-groups:state") { chain ->
                 val target = chain.thisObject as? View
-                target?.let { sessions.remove(it)?.restore() }
+                target?.let {
+                    retireIfInvalid(it)
+                    sessions.remove(it)?.restore()
+                }
                 val result = chain.proceed()
                 if (target != null) runCatching { apply(target) }.onFailure {
-                    sessions.remove(target)?.restore()
+                    retire(target, true)
                     runtime.log("Collapsed notification group update failed; restored native state", it)
                 }
                 result
@@ -77,10 +84,12 @@ internal class NotificationGroupStack {
                     val size = if (count >= 2) height(target, count) else 0
                     if (size > 0) {
                         val owned = OwnedValue(schema.realHeight.getInt(target))
+                        val dimension = OwnedValue(target.measuredHeight)
                         schema.measured.invoke(target, target.measuredWidth, size)
                         schema.realHeight.setInt(target, size)
-                        owned.record(size)
-                        measurements[target] = Measurement(owned, NotificationScope.token(target), configurationRevision)
+                        owned.record(size); dimension.record(size)
+                        measurements[target] = Measurement(owned, dimension, GroupStackMembership(children(target)) { it.visibility != View.GONE },
+                            NotificationScope.token(target), configurationRevision)
                     }
                 }.onFailure { runtime.log("Notification group measured height unavailable", it) }
                 result
@@ -89,13 +98,35 @@ internal class NotificationGroupStack {
         runtime.type("com.android.systemui.statusbar.notification.row.ExpandableNotificationRow\$NotificationViewState")
             ?.methodOrNull("applyToView", View::class.java)?.let { method ->
                 runtime.hook(method, "notification-groups:apply-view") { chain ->
-                    val result = chain.proceed()
                     val target = chain.getArg(0) as? View
-                    val children = target?.let { schema.childrenContainer.get(it) as? View }
-                    children?.let { sessions[it]?.draw() }
+                    val containerView = target?.let { runCatching { schema.childrenContainer.get(it) as? View }.getOrNull() }
+                    containerView?.let(::retireIfInvalid)
+                    val result = chain.proceed()
+                    containerView?.let { sessions[it]?.draw() }
                     result
                 }
             }
+        // Group mutations and expansion must release both geometry and measurement
+        // before native code derives its next state from those properties.
+        val mutations = setOf("setChildrenExpanded", "setUserLocked", "setIsUserSwipingToExpandRow",
+            "setContainingNotification", "addNotification", "removeNotification", "applyChildOrder")
+        container.declaredMethods.filter { it.name in mutations }.forEach { method ->
+            runtime.hook(method, "notification-groups:mutation:${method.toGenericString()}") { chain ->
+                (chain.thisObject as? View)?.let { retire(it, false) }
+                chain.proceed()
+            }
+        }
+        // applyState may apply children after the summary row's ViewState callback.
+        // Reassert the current presentation only after that native pass completes.
+        container.declaredMethods.filter { it.name == "applyState" || it.name == "startAnimationToState" }.forEach { method ->
+            runtime.hook(method, "notification-groups:apply:${method.toGenericString()}") { chain ->
+                val target = chain.thisObject as? View
+                target?.let(::retireIfInvalid)
+                val result = chain.proceed()
+                target?.let { sessions[it]?.draw() }
+                result
+            }
+        }
         listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == null || key.startsWith("notification_group_stack_")) {
                 configurationRevision++
@@ -106,17 +137,30 @@ internal class NotificationGroupStack {
     }
 
     private fun releaseMeasurement(view: View) {
-        measurements.remove(view)?.owned?.release(schema.realHeight.getInt(view)) { schema.realHeight.setInt(view, it) }
+        val value = measurements.remove(view) ?: return
+        value.owned.release(schema.realHeight.getInt(view)) { schema.realHeight.setInt(view, it) }
+        value.dimension.release(view.measuredHeight) { schema.measured.invoke(view, view.measuredWidth, it) }
+    }
+
+    private fun retire(view: View, requestLayout: Boolean) {
+        val changed = sessions.containsKey(view) || measurements.containsKey(view)
+        sessions.remove(view)?.restore()
+        releaseMeasurement(view)
+        if (changed && requestLayout) view.requestLayout()
+    }
+
+    private fun retireIfInvalid(view: View) {
+        if (sessions[view]?.stale() == true || measurements[view]?.members?.matches(children(view)) { it.parent === view } == false ||
+            ((sessions.containsKey(view) || measurements.containsKey(view)) && eligibleCount(view) < 2)) retire(view, true)
     }
 
     private fun releaseStale() {
         val targets = sessions.filterValues { it.stale() }.keys.toList() + measurements.filter { (view, entry) ->
-            entry.revision != configurationRevision || !NotificationScope.isCurrent(view, entry.token)
+            entry.revision != configurationRevision || !NotificationScope.isCurrent(view, entry.token) ||
+                !entry.members.matches(children(view)) { it.parent === view } || eligibleCount(view) < 2
         }.keys.toList()
         targets.distinct().forEach { view ->
-            sessions.remove(view)?.restore()
-            releaseMeasurement(view)
-            view.requestLayout()
+            retire(view, true)
         }
     }
 
@@ -132,13 +176,15 @@ internal class NotificationGroupStack {
         if (schema.bundleHeader.get(container) != null) return 0
         val injector = schema.injector.get(container) ?: return 0
         if (injector.read("mMiuiGroupHeader") == null || injector.read("isCollapseAnimating") == true) return 0
-        val count = children(container).size.coerceAtMost(3)
+        val members = children(container)
+        if (members.any { it.parent !== container }) return 0
+        val count = members.count { it.visibility != View.GONE }.coerceAtMost(3)
         return if (count >= 2) count else 0
     }
 
     private fun spacing(container: View): Float = prefs.number("notification_group_stack_spacing", 6f, 0f, 32f) * container.resources.displayMetrics.density
 
-    private fun height(container: View, count: Int): Int = children(container).take(count).mapIndexed { index, row ->
+    private fun height(container: View, count: Int): Int = children(container).filter { it.visibility != View.GONE }.take(count).mapIndexed { index, row ->
         val state = row.call("getViewState")
         val stateHeight = state?.let { schema.stateHeight.getInt(it) } ?: 0
         val h = stateHeight.takeIf { it > 0 } ?: (row.call("getIntrinsicHeight") as? Number)?.toInt() ?: row.measuredHeight
@@ -148,21 +194,33 @@ internal class NotificationGroupStack {
     private fun apply(container: View) {
         val count = eligibleCount(container)
         if (count < 2) return
-        val session = Session(container)
+        val members = children(container)
+        val active = members.filter { it.visibility != View.GONE }
+        val rows = active.take(count)
+        val states = rows.map { it.call("getViewState") ?: return }
+        val session = Session(container, members)
         sessions[container] = session
         container.addOnAttachStateChangeListener(session)
-        val rows = children(container).take(count)
         val gap = spacing(container)
         val ratio = prefs.number("notification_group_stack_scale", .95f, .5f, 1f)
         val oldLastY = rows.last().call("getViewState")?.let { schema.y.getFloat(it) } ?: 0f
         rows.forEachIndexed { index, row ->
-            val state = row.call("getViewState") ?: return@forEachIndexed
+            val state = states[index]
             session.write(state, schema.y, index * gap)
             session.write(state, schema.z, 0f)
+            schema.alpha?.let { session.write(state, it, 1f) }
+            schema.hidden?.let { session.write(state, it, false) }
             val scale = NotificationMotion.group(index, 0f, ratio).scale
             session.write(state, schema.sx, scale); session.write(state, schema.sy, scale)
             session.rows += Row(WeakReference(row), index * gap, scale, Appearance(row))
             session.childLayout(row)
+        }
+        active.drop(count).forEach { row ->
+            session.hideOverflow(row)
+            row.call("getViewState")?.let { state ->
+                schema.alpha?.let { session.write(state, it, 0f) }
+                schema.hidden?.let { session.write(state, it, true) }
+            }
         }
         schema.overflow.get(container)?.let { state ->
             session.write(state, schema.y, schema.y.getFloat(state) + (count - 1) * gap - oldLastY)
@@ -211,11 +269,14 @@ internal class NotificationGroupStack {
         }
     }
 
-    private inner class Session(container: View) : View.OnAttachStateChangeListener {
+    private inner class Session(container: View, members: List<View>) : View.OnAttachStateChangeListener {
         private val target = WeakReference(container)
         private val token = NotificationScope.token(container)
         private val revision = configurationRevision
-        fun stale() = revision != configurationRevision || target.get()?.let { !NotificationScope.isCurrent(it, token) } != false
+        private val membership = GroupStackMembership(members) { it.visibility != View.GONE }
+        fun stale() = revision != configurationRevision || target.get()?.let {
+            !NotificationScope.isCurrent(it, token) || !membership.matches(children(it)) { row -> row.parent === it }
+        } != false
         val rows = mutableListOf<Row>()
         private val fields = mutableListOf<Triple<WeakReference<Any>, Field, OwnedValue<Any?>>>()
         private val appearance = mutableListOf<Pair<WeakReference<View>, Appearance>>()
@@ -223,6 +284,8 @@ internal class NotificationGroupStack {
         private val oldOrder = (container as? ViewGroup)?.let { group -> (0 until group.childCount).map { WeakReference(group.getChildAt(it)) } }.orEmpty()
         private var lastOrder: List<WeakReference<View>>? = null
         private var restored = false
+        private var drawing = false
+        private val overflowRows = mutableListOf<Pair<WeakReference<View>, Appearance>>()
 
         fun write(owner: Any, field: Field, value: Any?) {
             val owned = OwnedValue(field.get(owner))
@@ -235,6 +298,14 @@ internal class NotificationGroupStack {
             appearance += WeakReference(view) to original
             if (visibility == null) view.alpha = 0f else view.visibility = visibility
             original.mark(view, if (visibility == null) "alpha" else "visibility")
+        }
+
+        fun hideOverflow(row: View) {
+            val original = Appearance(row)
+            appearance += WeakReference(row) to original
+            overflowRows += WeakReference(row) to original
+            row.visibility = View.INVISIBLE
+            original.mark(row, "visibility")
         }
 
         fun childLayout(row: View) {
@@ -262,13 +333,18 @@ internal class NotificationGroupStack {
         }
 
         fun draw() {
-            if (restored) return
+            if (restored || drawing) return
             val container = target.get() ?: return
             val count = eligibleCount(container)
-            if (restored || stale() || count < 2) {
-                sessions.remove(container, this); restore(); container.requestLayout(); return
-            }
+            if (stale() || count < 2) { retire(container, true); return }
+            drawing = true
+            try {
+            overflowRows.forEach { (reference, original) -> reference.get()?.let {
+                it.visibility = View.INVISIBLE; original.mark(it, "visibility")
+            } }
             rows.forEach { item -> item.view.get()?.let { row ->
+                row.alpha = 1f; item.original.mark(row, "alpha")
+                row.visibility = View.VISIBLE; item.original.mark(row, "visibility")
                 row.pivotX = row.width / 2f; item.original.mark(row, "px")
                 row.pivotY = row.height.toFloat(); item.original.mark(row, "py")
                 row.translationY = item.y; item.original.mark(row, "y")
@@ -289,6 +365,7 @@ internal class NotificationGroupStack {
                 oldOrder.mapNotNull { it.get() }.filter { view -> rows.none { it.view.get() === view } }.forEach(group::bringChildToFront)
                 lastOrder = (0 until group.childCount).map { WeakReference(group.getChildAt(it)) }
             }
+            } finally { drawing = false }
         }
 
         fun restore() {
@@ -318,7 +395,7 @@ internal class NotificationGroupStack {
             }
         }
         override fun onViewAttachedToWindow(v: View) = Unit
-        override fun onViewDetachedFromWindow(v: View) { sessions.remove(v); restore() }
+        override fun onViewDetachedFromWindow(v: View) { retire(v, false) }
     }
 
     private class Schema(container: Class<*>, row: Class<*>, state: Class<*>, expandable: Class<*>) {
@@ -338,6 +415,12 @@ internal class NotificationGroupStack {
         val z = required(state, "mZTranslation")
         val sx = required(state, "mScaleX")
         val sy = required(state, "mScaleY")
+        // ROM aliases are optional and resolved once. Direct view ownership is
+        // still restored when a firmware has no matching animation-state field.
+        val alpha = sequenceOf("mAlpha", "alpha").mapNotNull(state::fieldOrNull)
+            .firstOrNull { it.type == Float::class.javaPrimitiveType }
+        val hidden = sequenceOf("mHidden", "hidden").mapNotNull(state::fieldOrNull)
+            .firstOrNull { it.type == Boolean::class.javaPrimitiveType }
         val stateHeight = required(expandable, "height")
         val measured: Method = requireNotNull(View::class.java.methodOrNull("setMeasuredDimension", Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!))
     }

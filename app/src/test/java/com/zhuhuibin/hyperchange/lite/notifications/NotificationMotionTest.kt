@@ -62,8 +62,10 @@ class NotificationMotionTest {
         assertTrue(NotificationMotion.releasesTilt(4f, 20f, true))
     }
 
-    @Test fun collapsedGroupIsThreeCardLinearStack() {
-        assertEquals(NotificationMotion.GroupFrame(8f, .98f), NotificationMotion.group(2, 4f, .99f))
+    @Test fun collapsedGroupKeepsThreePositiveCardScales() {
+        assertEquals(8f, NotificationMotion.group(2, 4f, .99f).offsetDp, 0f)
+        assertEquals(.9801f, NotificationMotion.group(2, 4f, .99f).scale, .000001f)
+        assertEquals(.25f, NotificationMotion.group(2, 4f, .5f).scale, 0f)
         assertEquals(NotificationMotion.group(2, 4f, .99f), NotificationMotion.group(99, 4f, .99f))
         assertEquals(NotificationMotion.GroupFrame(0f, 1f), NotificationMotion.group(0, 6f, .95f))
     }
