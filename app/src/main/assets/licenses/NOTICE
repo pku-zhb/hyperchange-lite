@@ -1,0 +1,30 @@
+hc-lite
+Derived from HyperChanger
+Copyright 2026 btm_m and hc-lite contributors
+
+This fork is distributed under GNU Affero General Public License, version 3.
+Original HyperChanger files retain their AGPL-3.0-or-later grant. LICENSE is
+retained from the original combined distribution. Removing unrelated product
+components does not remove the original copyright and license grants.
+
+Selected source and targets were adapted from HyperChanger commit
+5d89372aaa1a6192e098be4baf93effff301cb07, including soft-glass arithmetic,
+notification material selection, widget/sidebar adapters, Control Center radius
+targets and volume long-press behavior.
+
+HyperLight was inspected as behavioral evidence for newly written notification
+and volume effects and local preview interactions. No HyperLight binary, native
+library, decompiled source tree or proprietary preview asset is distributed.
+
+Runtime dependencies retain their own licenses:
+- Miuix: Apache License 2.0
+- Jetpack / Compose Multiplatform: Apache License 2.0
+- Kotlin standard library: Apache License 2.0
+- libxposed service and interface: their upstream Apache License 2.0 notices
+- LSPosed HiddenApiBypass: Apache License 2.0
+
+Source projects:
+https://github.com/ColdP/HyperChanger
+https://github.com/compose-miuix-ui/miuix
+https://github.com/libxposed/service
+https://github.com/LSPosed/AndroidHiddenApiBypass

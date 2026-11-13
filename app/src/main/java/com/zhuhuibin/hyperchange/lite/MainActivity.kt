@@ -93,6 +93,15 @@ class MainActivity : ComponentActivity() {
             LiteApp(
                 repository = repository, revision = revision,
                 themeMode = appUi.themeMode, language = appUi.language,
+                floatingNavigation = appUi.floatingNavigation, appBlur = appUi.appBlur,
+                onFloatingNavigation = { enabled ->
+                    AppUiPreferences.saveNavigation(this, enabled)
+                    appUi = appUi.copy(floatingNavigation = enabled)
+                },
+                onAppBlur = { enabled ->
+                    AppUiPreferences.saveAppBlur(this, enabled)
+                    appUi = appUi.copy(appBlur = enabled)
+                },
                 onThemeMode = { mode ->
                     AppUiPreferences.saveTheme(this, mode)
                     appUi = appUi.copy(themeMode = mode)

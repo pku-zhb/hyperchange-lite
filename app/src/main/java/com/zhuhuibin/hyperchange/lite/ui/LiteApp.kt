@@ -39,6 +39,8 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -55,11 +57,17 @@ fun LiteApp(
     wallpaperUri: String?, wallpaperStyle: Int,
     onChooseImage: () -> Unit, onWallpaperStyle: (Int) -> Unit,
     themeMode: Int, language: String,
+    floatingNavigation: Boolean, appBlur: Boolean,
+    onFloatingNavigation: (Boolean) -> Unit, onAppBlur: (Boolean) -> Unit,
     onThemeMode: (Int) -> Unit, onLanguage: (String) -> Unit,
 ) {
-    val mode = when (themeMode) { 1 -> ColorSchemeMode.Light; 2 -> ColorSchemeMode.Dark; else -> ColorSchemeMode.System }
+    val mode = when (themeMode) {
+        1 -> ColorSchemeMode.Light; 2 -> ColorSchemeMode.Dark
+        3 -> ColorSchemeMode.MonetSystem; 4 -> ColorSchemeMode.MonetLight; 5 -> ColorSchemeMode.MonetDark
+        else -> ColorSchemeMode.System
+    }
     val theme = remember(mode) { ThemeController(mode) }
-    val night = when (themeMode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
+    val night = AppUiSettings(themeMode).isDark(isSystemInDarkTheme())
     val pageStates = rememberSaveableStateHolder()
     var page by rememberSaveable { mutableStateOf("home") }
     var editKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -85,22 +93,26 @@ fun LiteApp(
     LaunchedEffect(editKey) {
         if (editKey?.let { it in DeferredSettings.hiddenKeys } == true) editKey = null
     }
-    val back = { page = "home" }
+    val secondaryPage = page in setOf("theme", "credits", "licenses")
+    val back = { page = when (page) { "theme" -> "settings"; "credits", "licenses" -> "about"; else -> "home" } }
     BackHandler(page != "home" && editKey == null && !resetDialog) { back() }
     MiuixTheme(controller = theme) {
+        val surface = MiuixTheme.colorScheme.surface
+        val backdrop = rememberLayerBackdrop { drawRect(surface); drawContent() }
         Scaffold(topBar = {
             SmallTopAppBar(
-                title = uiText(feature?.title ?: when (page) { "settings" -> "设置"; "about" -> "关于"; else -> "主页" }),
+                title = uiText(feature?.title ?: when (page) { "settings" -> "设置"; "about" -> "关于"; "theme" -> "界面主题"; "credits" -> "致谢"; "licenses" -> "开源许可"; else -> "主页" }),
                 navigationIcon = {
-                    if (feature != null) IconButton(onClick = back) {
+                    if (feature != null || secondaryPage) IconButton(onClick = back) {
                         Icon(MiuixIcons.Basic.ArrowRight, uiText("返回"), Modifier.size(20.dp).graphicsLayer { rotationZ = 180f })
                     }
                 },
             )
         }, bottomBar = {
-            if (feature == null) RootNavigation(page) { page = it }
+            if (feature == null && !secondaryPage) RootNavigation(page, floatingNavigation, appBlur, backdrop) { page = it }
         }) { padding ->
-            val body = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)
+            val body = Modifier.fillMaxSize().then(if (appBlur) Modifier.layerBackdrop(backdrop) else Modifier)
+                .padding(padding).consumeWindowInsets(padding)
             when {
                 feature != null -> pageStates.SaveableStateProvider(feature.name) {
                     FeaturePage(feature, repository, revision, values, ::writeSetting, { editKey = it.key },
@@ -108,9 +120,12 @@ fun LiteApp(
                         onApplyGlassPreset, onRestoreGlassPreset, wallpaperUri, wallpaperStyle,
                         onChooseImage, onWallpaperStyle, night, body)
                 }
-                page == "settings" -> SettingsPage(themeMode, language, onThemeMode, onLanguage,
+                page == "settings" -> SettingsPage(language, onLanguage, { page = "theme" },
                     onExport, onImport, { resetDialog = true }, body)
-                page == "about" -> AboutPage(body)
+                page == "theme" -> ThemePage(themeMode, onThemeMode, floatingNavigation, onFloatingNavigation, appBlur, onAppBlur, body)
+                page == "about" -> AboutPage({ page = "credits" }, { page = "licenses" }, body)
+                page == "credits" -> CreditsPage(body)
+                page == "licenses" -> LicensePage(body)
                 else -> Column(body.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Card(Modifier.fillMaxWidth()) {
                         BasicComponent(insideMargin = compactPreferenceMargin, title = uiText(when {
@@ -120,7 +135,7 @@ fun LiteApp(
                         }), summary = uiText(when {
                             repository.syncFailed -> "本机修改已保留；系统界面恢复连接后会自动同步。"
                             repository.connected -> "参数实时同步；部分尺寸与圆角需重开面板生效。"
-                            else -> "请在 LSPosed 启用模块，勾选系统界面并重启一次系统界面。"
+                            else -> "请在模块管理器启用模块，勾选系统界面并重启一次系统界面。"
                         }))
                     }
                     Card(Modifier.fillMaxWidth()) {

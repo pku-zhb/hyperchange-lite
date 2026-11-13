@@ -1,6 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package com.zhuhuibin.hyperchange.lite.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,11 +43,20 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 
 @Composable
-internal fun RootNavigation(page: String, onPage: (String) -> Unit) {
-    NavigationBar {
-        NavigationBarItem(page == "home", { onPage("home") }, RootIcons.home, uiText("主页"))
-        NavigationBarItem(page == "settings", { onPage("settings") }, RootIcons.settings, uiText("设置"))
-        NavigationBarItem(page == "about", { onPage("about") }, RootIcons.info, uiText("关于"))
+internal fun RootNavigation(page: String, floating: Boolean, blur: Boolean, backdrop: LayerBackdrop, onPage: (String) -> Unit) {
+    val items = listOf(Triple("home", RootIcons.home, "主页"), Triple("settings", RootIcons.settings, "设置"), Triple("about", RootIcons.info, "关于"))
+    val shape = RoundedCornerShape(if (floating) 32.dp else 0.dp)
+    val baseColor = if (floating) MiuixTheme.colorScheme.surfaceContainer else MiuixTheme.colorScheme.surface
+    val effect = if (blur) Modifier.textureBlur(backdrop = backdrop, shape = shape,
+        blurRadius = 25f, colors = BlurDefaults.blurColors(blendColors = listOf(BlendColorEntry(baseColor.copy(alpha = .65f))))) else Modifier
+    if (floating) {
+        FloatingNavigationBar(modifier = effect, color = if (blur) Color.Transparent else baseColor) {
+            items.forEach { (key, icon, title) -> FloatingNavigationBarItem(page == key, { onPage(key) }, icon, uiText(title)) }
+        }
+    } else {
+        NavigationBar(modifier = effect, color = if (blur) Color.Transparent else baseColor) {
+            items.forEach { (key, icon, title) -> NavigationBarItem(page == key, { onPage(key) }, icon, uiText(title)) }
+        }
     }
 }
 
@@ -76,18 +99,15 @@ private object RootIcons {
 
 @Composable
 internal fun SettingsPage(
-    themeMode: Int, language: String, onThemeMode: (Int) -> Unit, onLanguage: (String) -> Unit,
+    language: String, onLanguage: (String) -> Unit, onTheme: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onReset: () -> Unit, modifier: Modifier,
 ) {
-    val themeNames = listOf(uiText("跟随系统"), uiText("浅色"), uiText("深色"))
     val languageNames = listOf(uiText("跟随系统"), uiText("简体中文"), uiText("English"))
     val languages = listOf("system", "zh-CN", "en")
     Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Card(Modifier.fillMaxWidth()) {
-            WindowDropdownPreference(title = uiText("界面主题"), summary = uiText("仅改变本设置应用的外观"), items = themeNames,
-                selectedIndex = themeMode.coerceIn(0, 2), insideMargin = compactPreferenceMargin,
-                onSelectedIndexChange = onThemeMode)
+            ArrowPreference(uiText("界面主题"), insideMargin = compactPreferenceMargin, onClick = onTheme)
             WindowDropdownPreference(title = uiText("界面语言"), items = languageNames,
                 selectedIndex = languages.indexOf(language).coerceAtLeast(0), insideMargin = compactPreferenceMargin,
                 onSelectedIndexChange = { onLanguage(languages[it]) })
@@ -101,7 +121,7 @@ internal fun SettingsPage(
 }
 
 @Composable
-internal fun AboutPage(modifier: Modifier) {
+internal fun AboutPage(onCredits: () -> Unit, onLicenses: () -> Unit, modifier: Modifier) {
     val context = LocalContext.current
     val links = LocalUriHandler.current
     val version = remember(context) {
@@ -109,8 +129,11 @@ internal fun AboutPage(modifier: Modifier) {
     }
     Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Card(Modifier.fillMaxWidth()) {
-            BasicComponent(title = "hc-lite", insideMargin = compactPreferenceMargin, endActions = { Text(version) })
+        Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Image(painterResource(com.zhuhuibin.hyperchange.lite.R.drawable.hc_launcher_foreground), null, Modifier.size(88.dp))
+            Text("hc-lite", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(version, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         }
         Card(Modifier.fillMaxWidth()) {
             DonationEntry()
@@ -118,10 +141,12 @@ internal fun AboutPage(modifier: Modifier) {
                 onClick = { links.openUri("https://github.com/pku-zhb/hc-lite") })
             ArrowPreference(uiText("问题反馈"), insideMargin = compactPreferenceMargin,
                 onClick = { links.openUri("https://github.com/pku-zhb/hc-lite/issues") })
-            ArrowPreference(uiText("上游项目"), insideMargin = compactPreferenceMargin,
-                onClick = { links.openUri("https://github.com/ColdP/HyperChanger") })
-            ArrowPreference(uiText("开源许可"), insideMargin = compactPreferenceMargin,
-                onClick = { links.openUri("https://github.com/pku-zhb/hc-lite/blob/main/LICENSE") })
+            ArrowPreference(uiText("致谢"), insideMargin = compactPreferenceMargin, onClick = onCredits)
+            ArrowPreference(uiText("开源许可"), insideMargin = compactPreferenceMargin, onClick = onLicenses)
+        }
+        Card(Modifier.fillMaxWidth()) {
+            ArrowPreference(title = "hmc-duo", summary = uiText("友情链接"), insideMargin = compactPreferenceMargin,
+                onClick = { links.openUri("https://github.com/pku-zhb/hmc-duo") })
         }
     }
 }

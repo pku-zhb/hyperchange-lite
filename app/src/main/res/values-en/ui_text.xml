@@ -494,4 +494,23 @@
     <string name="ui_copy_could_not_load_image">Could not load image</string>
     <string name="ui_copy_loading_image">Loading image</string>
     <string name="ui_copy_close">Close</string>
+    <string name="ui_copy_enable_this_module_in_your_module_manager_select_system_ui_and_restart">Enable this module in your module manager, select System UI, and restart System UI once.</string>
+    <string name="ui_copy_wallpaper_colors_system">Wallpaper colors · System</string>
+    <string name="ui_copy_wallpaper_colors_light">Wallpaper colors · Light</string>
+    <string name="ui_copy_wallpaper_colors_dark">Wallpaper colors · Dark</string>
+    <string name="ui_copy_theme_mode">Theme mode</string>
+    <string name="ui_copy_floating_navigation_bar">Floating navigation bar</string>
+    <string name="ui_copy_in_app_blur">In-app blur</string>
+    <string name="ui_copy_credits">Credits</string>
+    <string name="ui_copy_friends">Friends</string>
+    <string name="ui_copy_upstream_project_soft_glass_materials_presets_and_selected_system_adap">Upstream project; soft-glass materials, presets, and selected system adapters.</string>
+    <string name="ui_copy_behavioral_reference_for_notification_and_volume_interactions_source_a">Behavioral reference for notification and volume interactions. Source authorization has not been granted; decompiled source and assets are not distributed.</string>
+    <string name="ui_copy_settings_interface_and_theme_components">Settings interface and theme components.</string>
+    <string name="ui_copy_module_framework_process_communication_and_hidden_api_access">Module framework, process communication, and hidden API access.</string>
+    <string name="ui_copy_app_libraries_and_declarative_ui">App libraries and declarative UI.</string>
+    <string name="ui_copy_third_party_components_retain_their_own_copyrights_and_licenses_full_b">Third-party components retain their own copyrights and licenses. Full bundled license texts follow.</string>
+    <string name="ui_copy_loading_license_texts">Loading license texts</string>
+    <string name="ui_copy_lock_screen_notification_material">Lock-screen notification material</string>
+    <string name="ui_copy_lock_screen_notification_animations">Lock-screen notification animations</string>
+    <string name="ui_copy_check_compatibility">Check compatibility</string>
 </resources>

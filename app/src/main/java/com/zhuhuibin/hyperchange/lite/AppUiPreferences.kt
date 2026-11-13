@@ -8,7 +8,16 @@ import android.os.LocaleList
 import org.json.JSONObject
 
 /** App appearance is local to the settings App, never published into hooked processes. */
-data class AppUiSettings(val themeMode: Int = 0, val language: String = "system")
+data class AppUiSettings(
+    val themeMode: Int = 0, val language: String = "system",
+    val floatingNavigation: Boolean = false, val appBlur: Boolean = true,
+) {
+    fun isDark(systemDark: Boolean): Boolean = when (themeMode) {
+        1, 4 -> false
+        2, 5 -> true
+        else -> systemDark
+    }
+}
 
 object AppUiPreferences {
     private const val GROUP = "app_ui"
@@ -18,7 +27,7 @@ object AppUiPreferences {
     fun observe(context: Context, changed: () -> Unit): () -> Unit {
         val preferences = context.getSharedPreferences(GROUP, Context.MODE_PRIVATE)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == "theme_mode" || key == "language") changed()
+            if (key == null || key == "theme_mode" || key == "language" || key == "floating_navigation" || key == "app_blur") changed()
         }
         preferences.registerOnSharedPreferenceChangeListener(listener)
         return { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -26,7 +35,7 @@ object AppUiPreferences {
 
     fun load(context: Context): AppUiSettings {
         val prefs = context.getSharedPreferences(GROUP, Context.MODE_PRIVATE)
-        val theme = runCatching { prefs.getInt("theme_mode", 0) }.getOrDefault(0).takeIf { it in 0..2 } ?: 0
+        val theme = runCatching { prefs.getInt("theme_mode", 0) }.getOrDefault(0).takeIf { it in 0..5 } ?: 0
         val saved = runCatching { prefs.getString("language", "system") }.getOrNull().takeIf { it in languages } ?: "system"
         val selected = runCatching { context.getSystemService(LocaleManager::class.java)?.applicationLocales }.getOrNull()
         val language = when {
@@ -36,12 +45,22 @@ object AppUiPreferences {
             selected[0].language == "en" -> "en"
             else -> "system"
         }
-        return AppUiSettings(theme, language)
+        return AppUiSettings(theme, language,
+            runCatching { prefs.getBoolean("floating_navigation", false) }.getOrDefault(false),
+            runCatching { prefs.getBoolean("app_blur", true) }.getOrDefault(true))
     }
 
     fun saveTheme(context: Context, mode: Int) {
-        require(mode in 0..2)
+        require(mode in 0..5)
         context.getSharedPreferences(GROUP, Context.MODE_PRIVATE).edit().putInt("theme_mode", mode).apply()
+    }
+
+    fun saveNavigation(context: Context, floating: Boolean) {
+        context.getSharedPreferences(GROUP, Context.MODE_PRIVATE).edit().putBoolean("floating_navigation", floating).apply()
+    }
+
+    fun saveAppBlur(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(GROUP, Context.MODE_PRIVATE).edit().putBoolean("app_blur", enabled).apply()
     }
 
     fun saveLanguage(context: Context, language: String) {
@@ -54,6 +73,8 @@ object AppUiPreferences {
 
     fun restore(context: Context, settings: AppUiSettings) {
         saveTheme(context, settings.themeMode)
+        saveNavigation(context, settings.floatingNavigation)
+        saveAppBlur(context, settings.appBlur)
         saveLanguage(context, settings.language)
     }
 }
@@ -62,6 +83,7 @@ object AppUiPreferences {
 internal object AppUiSettingsCodec {
     fun encode(settings: AppUiSettings): JSONObject = JSONObject()
         .put("version", 1).put("themeMode", settings.themeMode).put("language", settings.language)
+        .put("floatingNavigation", settings.floatingNavigation).put("appBlur", settings.appBlur)
 
     fun fromBackup(text: String): AppUiSettings? {
         val root = JSONObject(text)
@@ -71,9 +93,16 @@ internal object AppUiSettingsCodec {
         require(value.optInt("version", -1) == 1) { "Unsupported App appearance version" }
         val rawTheme = value.get("themeMode")
         require(rawTheme is Number && rawTheme.toDouble().isFinite() &&
-            rawTheme.toDouble() in 0.0..2.0 && rawTheme.toDouble() == rawTheme.toInt().toDouble()) { "Invalid theme" }
+            rawTheme.toDouble() in 0.0..5.0 && rawTheme.toDouble() == rawTheme.toInt().toDouble()) { "Invalid theme" }
         val language = value.get("language")
         require(language is String && language in setOf("system", "zh-CN", "en")) { "Invalid language" }
-        return AppUiSettings(rawTheme.toInt(), language)
+        fun optionalBoolean(key: String, default: Boolean): Boolean {
+            if (!value.has(key)) return default
+            val setting = value.get(key)
+            require(setting is Boolean) { "Invalid appearance flag" }
+            return setting
+        }
+        return AppUiSettings(rawTheme.toInt(), language,
+            optionalBoolean("floatingNavigation", false), optionalBoolean("appBlur", true))
     }
 }

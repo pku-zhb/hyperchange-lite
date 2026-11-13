@@ -16,7 +16,7 @@ class SettingValuePresentationTest {
     @Test fun narrowRangesDoNotRewriteExtremeExistingPresets() {
         val spec = LiteCatalog.entries.first { it.key == "glass_refraction" }
         val value = builtInGlassPresets.first { it.id == "builtin-custom-c" }.values.getValue(spec.key)
-        assertFalse((value as Number).toFloat() in spec.sliderRange)
+        assertTrue((value as Number).toFloat() in spec.sliderRange)
         val stored = SettingsCodec.encode(listOf(spec), mapOf(spec.key to value))
         assertEquals(200f, SettingsCodec.decode(listOf(spec), stored)[spec.key])
         assertEquals(200f, spec.max, 0f)
@@ -24,7 +24,7 @@ class SettingValuePresentationTest {
 
     @Test fun oneStepMovesWithinTheWindowWithoutLargeMaterialJumps() {
         val spec = LiteCatalog.entries.first { it.key == "glass_background_brightness" }
-        assertEquals(-30f..30f, spec.sliderRange)
+        assertEquals(-59f..30f, spec.sliderRange)
         assertEquals(1f, spec.validate(spec.step))
         assertEquals("%", spec.valueUnit)
         assertEquals("px", LiteCatalog.entries.first { it.key == "volume_edge_gap" }.valueUnit)
@@ -41,6 +41,13 @@ class SettingValuePresentationTest {
         }
         assertTrue("glass_shade_scale" in DeferredSettings.hiddenKeys)
         assertTrue(LiteCatalog.entries.any { it.key == "glass_shade_scale" })
+    }
+
+    @Test fun everyBuiltInRecipeFitsTheCommonSliderWithoutChangingItsValues() {
+        val specs = LiteCatalog.entries.associateBy { it.key }
+        builtInGlassPresets.forEach { preset -> preset.values.forEach { (key, value) ->
+            if (value is Number) assertTrue("${preset.id}: $key=$value", value.toFloat() in specs.getValue(key).sliderRange)
+        } }
     }
 
     @Test fun edgeGapUsesASmallPixelSliderWithoutLimitingImportedPositions() {

@@ -108,7 +108,7 @@ class UiTextCatalogTest {
     @Test fun currentStructuredUiLiteralsHaveResources() {
         val quoted = Regex("\"((?:[^\"\\\\]|\\\\.)*)\"")
         val paths = listOf("ui/LiteApp.kt", "ui/AppPages.kt", "ui/GlassPresetControls.kt",
-            "ui/SettingEditorPlan.kt", "ui/SettingPresentation.kt", "ui/DonationDialog.kt")
+            "ui/SettingEditorPlan.kt", "ui/SettingPresentation.kt", "ui/DonationDialog.kt", "ui/AppearancePages.kt")
         paths.forEach { path ->
             quoted.findAll(File(source, path).readText()).forEach { match ->
                 val raw = match.groupValues[1]

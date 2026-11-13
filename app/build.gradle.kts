@@ -40,6 +40,7 @@ android {
 dependencies {
     implementation("androidx.activity:activity-compose:1.12.3")
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.4")
     implementation("top.yukonga.miuix.kmp:miuix-preference-android:0.9.4")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
     compileOnly("io.github.libxposed:api:102.0.0")

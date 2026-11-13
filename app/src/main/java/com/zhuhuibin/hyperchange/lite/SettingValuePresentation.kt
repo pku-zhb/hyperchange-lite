@@ -41,7 +41,12 @@ internal val LiteSetting.sliderRange: ClosedFloatingPointRange<Float>
             key == "volume_pop_power" -> 1f..4f
             else -> min..max
         }
-        return preferred.start.coerceIn(min, max)..preferred.endInclusive.coerceIn(min, max)
+        val anchors = buildList {
+            (defaultValue as? Number)?.toFloat()?.let(::add)
+            builtInGlassPresets.forEach { preset -> (preset.values[key] as? Number)?.toFloat()?.let(::add) }
+        }
+        return minOf(preferred.start, anchors.minOrNull() ?: preferred.start).coerceIn(min, max)..
+            maxOf(preferred.endInclusive, anchors.maxOrNull() ?: preferred.endInclusive).coerceIn(min, max)
     }
 
 internal val LiteSetting.valueUnit: String
