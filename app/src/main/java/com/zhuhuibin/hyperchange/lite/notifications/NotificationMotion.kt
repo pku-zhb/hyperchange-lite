@@ -2,8 +2,10 @@
 package com.zhuhuibin.hyperchange.lite.notifications
 
 import kotlin.math.cos
+import kotlin.math.cosh
 import kotlin.math.exp
 import kotlin.math.sin
+import kotlin.math.sinh
 import kotlin.math.sqrt
 
 /** Independent behavioral reconstruction; shared by system hooks and local previews. */
@@ -17,7 +19,12 @@ object NotificationMotion {
         val d = damping.coerceIn(.2f, 1.2f)
         val w = frequency.coerceIn(2f, 24f)
         val time = t * w
-        if (d >= 1f) return 1f - (1f + time) * exp(-time)
+        if (d == 1f) return 1f - (1f + time) * exp(-time)
+        if (d > 1f) {
+            // Overdamping is an exposed setting, not the same response as d = 1.
+            val wd = w * sqrt(d * d - 1f)
+            return 1f - exp(-d * time) * (cosh(wd * t) + d * w / wd * sinh(wd * t))
+        }
         val wd = w * sqrt(1f - d * d)
         return 1f - exp(-d * time) * (cos(wd * t) + d * w / wd * sin(wd * t))
     }

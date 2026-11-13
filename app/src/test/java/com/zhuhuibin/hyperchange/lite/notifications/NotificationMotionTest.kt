@@ -21,6 +21,22 @@ class NotificationMotionTest {
         assertTrue(NotificationMotion.spring(.5f, .34f, 7.5f) > NotificationMotion.spring(.5f, .72f, 9f))
     }
 
+    @Test fun overdampedSettingsRemainDistinctAndConvergeWithoutOvershoot() {
+        val critical = NotificationMotion.spring(.25f, 1f, 9f)
+        val overdamped = NotificationMotion.spring(.25f, 1.2f, 9f)
+        assertTrue("Increasing damping above one must slow the response", overdamped < critical)
+        assertEquals(critical, NotificationMotion.spring(.25f, 1.0001f, 9f), .0001f)
+        var previous = 0f
+        for (step in 0..100) {
+            val value = NotificationMotion.spring(step / 100f, 1.2f, 9f)
+            assertTrue(value.isFinite())
+            assertTrue(value in 0f..1f)
+            assertTrue(value >= previous)
+            previous = value
+        }
+        assertEquals(1f, previous, 0f)
+    }
+
     @Test fun bezierSolvesTheXCoordinateInsteadOfTreatingItAsTime() {
         assertEquals(.5f, NotificationMotion.bezier(.5f, .25f, .25f, .75f, .75f), .000001f)
         assertTrue(NotificationMotion.bezier(.5f) > .9f)

@@ -159,8 +159,11 @@ internal class ViewMaterialEngine(
         val name = method.name
         var baseline = copyArgs(input)
         if (name == "setMiGlass") {
-            val original = input.firstOrNull() as? FloatArray ?: return input
-            if (!hasSoftGlassRecipe(original)) {
+            val original = input.firstOrNull() as? FloatArray
+            // A null recipe is a native clear just like an empty/zero recipe.
+            // Retire the old source as well, or a later settings refresh can
+            // replay glass that the current OEM state no longer has.
+            if (original == null || !hasSoftGlassRecipe(original)) {
                 if (refreshing.get() != true) synchronized(baselines) {
                     baselines.getOrPut(view) { linkedMapOf() }[method] = baseline
                     arrayPairs.remove(view)

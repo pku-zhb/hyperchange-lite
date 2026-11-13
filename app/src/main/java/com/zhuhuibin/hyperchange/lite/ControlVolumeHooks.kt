@@ -14,6 +14,8 @@ import android.view.View
 import android.view.ViewOutlineProvider
 import com.zhuhuibin.hyperchange.lite.controls.VolumeAnimator
 import com.zhuhuibin.hyperchange.lite.controls.VolumePanelLongPress
+import com.zhuhuibin.hyperchange.lite.controls.VolumePanelAppearance
+import com.zhuhuibin.hyperchange.lite.controls.VolumeButtonVisibility
 import java.lang.reflect.Method
 import java.util.WeakHashMap
 
@@ -24,7 +26,7 @@ class ControlVolumeHooks {
     private val radiusCalls = WeakHashMap<Any, MutableMap<Method, RadiusBaseline>>()
     private val outlines = WeakHashMap<View, Pair<ViewOutlineProvider?, Boolean>>()
     private val deviceViews = WeakHashMap<View, Boolean>()
-    private val ringerVisibility = WeakHashMap<View, Int>()
+    private val ringerVisibility = WeakHashMap<View, VolumeButtonVisibility>()
     private val columns = WeakHashMap<Any, VolumeAnimator>()
     private val panels = WeakHashMap<View, Boolean>()
     private val refreshing = ThreadLocal<Boolean>()
@@ -282,13 +284,15 @@ class ControlVolumeHooks {
         val p = preferences ?: return
         val expanded = runCatching { panel.javaClass.getMethod("isExpanded").invoke(panel) as Boolean }.getOrDefault(true)
         val isControlCenter = readField(panel, "isControlCenterPanel") != false
-        for ((field, key) in listOf("mRingerModeLayout" to "volume_hide_ringer", "mExpandButton" to "volume_long_press")) {
+        val hideRinger = VolumePanelAppearance.hideRinger(isControlCenter, expanded,
+            p.getBoolean("volume_motion_enabled", false), p.getBoolean("volume_hide_ringer", false))
+        val hideExpand = VolumePanelAppearance.hideExpand(isControlCenter, expanded,
+            p.getBoolean("volume_long_press", false))
+        for ((field, hide) in listOf("mRingerModeLayout" to hideRinger, "mExpandButton" to hideExpand)) {
             val target = readField(panel, field) as? View ?: continue
-            val hide = p.getBoolean(key, false) && !isControlCenter && !expanded
-            if (hide) {
-                if (!ringerVisibility.containsKey(target) || (nativeUpdated && target.visibility != View.GONE)) ringerVisibility[target] = target.visibility
-                target.visibility = View.GONE
-            } else ringerVisibility.remove(target)?.let { target.visibility = it }
+            val owned = if (hide) ringerVisibility.getOrPut(target) { VolumeButtonVisibility() }
+                else ringerVisibility.remove(target)
+            owned?.let { target.visibility = it.resolve(target.visibility, hide, nativeUpdated, View.GONE) }
         }
     }
 
