@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.zhuhuibin.hyperchange.lite.*
 import com.zhuhuibin.hyperchange.lite.preview.GlassPlayground
-import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
@@ -166,17 +167,6 @@ private fun FeaturePage(
     val target = previewTargetForSetting(focused, values, editedKey)
     // Each project opens at its first setting, without carrying an old list's scroll or focus.
     val list = key(selectedProject) { rememberLazyListState() }
-    LaunchedEffect(list, selectedProject) {
-        snapshotFlow {
-            list.isScrollInProgress to list.layoutInfo.visibleItemsInfo
-                .firstOrNull { (it.key as? String)?.startsWith("setting:") == true }?.key
-        }.distinctUntilChanged().collect { (scrolling, key) ->
-            if (scrolling && key is String) {
-                val visibleKey = key.removePrefix("setting:")
-                if (specs.any { it.key == visibleKey }) focusedKey = visibleKey
-            }
-        }
-    }
     fun write(spec: LiteSetting, value: Any) { focusedKey = spec.key; onWrite(spec, value) }
     fun edit(spec: LiteSetting) { focusedKey = spec.key; onEdit(spec) }
     BoxWithConstraints(modifier) {
@@ -252,9 +242,9 @@ private fun EditorControl(item: EditorItem, values: Map<String, *>, onWrite: (Li
 }
 
 @Composable
-internal fun EditorNote(text: String) {
+internal fun EditorNote(text: String, modifier: Modifier = Modifier) {
     Text(text, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 }
 
 @Composable
@@ -325,9 +315,9 @@ private fun NumberSetting(spec: LiteSetting, value: Float, reason: String?, onWr
             minWidth = 44.dp, minHeight = 44.dp, insideMargin = PaddingValues(0.dp),
             modifier = Modifier.semantics { contentDescription = "$increaseLabel $title" })
     }
-    if (outside) TextButton(String.format(uiText("超出常用区间 %s–%s，点此移回"), display(range.start), display(range.endInclusive)),
-        { change(draft.coerceIn(range.start, range.endInclusive)) }, enabled = enabled,
-        modifier = Modifier.fillMaxWidth(), minHeight = 44.dp)
+    if (outside) EditorNote(String.format(uiText("超出常用区间 %s–%s，点此移回"), display(range.start), display(range.endInclusive)),
+        Modifier.clickable(enabled = enabled, role = Role.Button) { change(draft.coerceIn(range.start, range.endInclusive)) }
+            .heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically))
 }
 
 @Composable
