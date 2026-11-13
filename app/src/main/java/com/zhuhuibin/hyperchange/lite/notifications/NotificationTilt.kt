@@ -114,7 +114,8 @@ internal class NotificationTilt {
         private var closed = false
         private val ownership = mutableMapOf<String, OwnedValue<Float>>()
         private var animator: ValueAnimator? = null
-        private var touching = false
+        var touching = false
+            private set
         private var destination = 0f
         private var downX = 0f
         private var downY = 0f
@@ -262,7 +263,7 @@ internal class NotificationTilt {
         if (view !is ViewGroup) return false
         for (i in 0 until view.childCount) {
             val child = view.getChildAt(i)
-            if ((sessions[child]?.progress ?: 0f) > 0f || hasPressedChild(child)) return true
+            if (sessions[child]?.touching == true || hasPressedChild(child)) return true
         }
         return false
     }

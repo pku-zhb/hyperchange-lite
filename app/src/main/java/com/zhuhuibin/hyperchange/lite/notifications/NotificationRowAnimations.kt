@@ -9,6 +9,7 @@ import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.HookRuntime
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
@@ -104,7 +105,9 @@ internal class NotificationRowAnimations {
         val duration = prefs.number("${prefix}_duration", if (adding) 700f else 500f, 0f, 1500f).toLong()
         val damping = prefs.number("notification_stack_anim_damping", .6f, .2f, 1.2f)
         val frequency = prefs.number("notification_stack_anim_frequency", 8f, 2f, 24f)
-        val session = Session(view, baseline, onEnd, listener)
+        val updateOwner = requireNotNull(view.call("getInjector"))
+        val update = requireNotNull(updateOwner.javaClass.methodOrNull("scheduleUpdateProperties"))
+        val session = Session(view, baseline, updateOwner, update, onEnd, listener)
         sessions[view] = session
         view.addOnAttachStateChangeListener(session)
         try {
@@ -118,6 +121,7 @@ internal class NotificationRowAnimations {
                     runCatching {
                         write(view, 1f - (1f - scale) * amount, 1f - (1f - alpha) * amount)
                         session.blur.apply(blur * amount)
+                        session.scheduleUpdate()
                     }.onFailure { session.finish(true) }
                 }
                 addListener(object : AnimatorListenerAdapter() {
@@ -128,7 +132,7 @@ internal class NotificationRowAnimations {
                 })
             }
             session.animator = animator
-            if (adding) { write(view, scale, alpha); session.blur.apply(blur) }
+            if (adding) { write(view, scale, alpha); session.blur.apply(blur); session.scheduleUpdate() }
             animator.start()
         } catch (error: Throwable) {
             session.finish(true)
@@ -138,12 +142,17 @@ internal class NotificationRowAnimations {
         }
     }
 
-    private inner class Session(private val view: View, private val baseline: FloatArray, onEnd: Runnable?, private val external: AnimatorListenerAdapter?) : View.OnAttachStateChangeListener {
+    private inner class Session(
+        private val view: View, private val baseline: FloatArray,
+        private val updateOwner: Any, private val update: Method,
+        onEnd: Runnable?, private val external: AnimatorListenerAdapter?,
+    ) : View.OnAttachStateChangeListener {
         val blur = SurfaceBlur(view) { runtime.log(it) }
         private val token = NotificationScope.token(view)
         private val revision = configurationRevision
         private val owned = baseline.map { OwnedValue(it) }
         private var finished = false
+        fun scheduleUpdate() { update.invoke(updateOwner) }
         fun record(index: Int, value: Float) { owned[index].record(value) }
         fun stale() = revision != configurationRevision || !NotificationScope.isCurrent(view, token)
         fun valid() = !finished && eligible(view) && !finished && !stale()
@@ -159,6 +168,7 @@ internal class NotificationRowAnimations {
                     owned[index].release(current) { setValue.invoke(property, view, it) }
                 }
             }
+            runCatching { scheduleUpdate() }
             runCatching { blur.restore() }
             if (committed) {
                 runCatching { onEnd?.run() }
@@ -182,7 +192,10 @@ internal class NotificationRowAnimations {
 }
 
 /** Captures an existing effect on ROMs exposing the getter; owns only the animation interval. */
-internal class SurfaceBlur(private val view: View, private val log: (String) -> Unit = {}) {
+internal class SurfaceBlur(
+    private val view: View, minUpdateIntervalMs: Long = 0L,
+    private val log: (String) -> Unit = {},
+) {
     private val capture = runCatching {
         val getter = requireNotNull(view.javaClass.methodOrNull("getRenderEffect"))
         val value = getter.invoke(view)
@@ -191,26 +204,27 @@ internal class SurfaceBlur(private val view: View, private val log: (String) -> 
     }
     private val original = capture.getOrNull()
     private val owned = OwnedValue(original)
-    private var last = Float.NaN
+    private val updates = BlurFrameGate(minUpdateIntervalMs)
     fun apply(radius: Float) {
         if (capture.isFailure) {
             if (radius > 0f && warned.compareAndSet(false, true)) log("Surface blur skipped: OEM RenderEffect baseline cannot be read safely")
             return
         }
         val rounded = NotificationMotion.blurRadius(radius.coerceAtLeast(0f))
-        if (last == rounded) return
-        last = rounded
+        val now = SystemClock.uptimeMillis()
+        if (!updates.shouldApply(rounded, now)) return
         val blur = if (rounded > 0f) RenderEffect.createBlurEffect(rounded, rounded, Shader.TileMode.CLAMP) else null
         val effect = if (blur != null && original != null) RenderEffect.createChainEffect(blur, original) else blur ?: original
         view.setRenderEffect(effect)
         owned.record(effect)
+        updates.committed(rounded, now)
     }
     fun restore() {
         if (capture.isSuccess) runCatching {
             val current = view.javaClass.methodOrNull("getRenderEffect")?.invoke(view) as? RenderEffect
             owned.release(current) { view.setRenderEffect(it) }
         }
-        last = Float.NaN
+        updates.reset()
     }
     companion object { private val warned = java.util.concurrent.atomic.AtomicBoolean() }
 }

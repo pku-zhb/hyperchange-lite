@@ -70,7 +70,9 @@ internal class NotificationHeadsUp {
         fun animation(durationKey: String, delayKey: String, defaultDuration: Float, defaultDelay: Float,
                       phase: String, update: (Float) -> Unit): ValueAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = prefs.number(durationKey, defaultDuration, 200f, 1500f).toLong()
-            startDelay = prefs.number(delayKey, defaultDelay, 0f, 600f).toLong().let { if (entering) it.coerceAtLeast(32) else it }
+            startDelay = NotificationMotion.headsUpDelay(
+                prefs.number(delayKey, defaultDelay, 0f, 600f).toLong(), entering, phase == "scale",
+            )
             setInterpolator { t ->
                 val spring = prefs.flag("${if (phase == "scale") prefix else "notification_heads_up_pop"}_spring")
                 if (spring) NotificationMotion.spring(t,
@@ -145,7 +147,7 @@ internal class NotificationHeadsUp {
 
     private inner class Session(private val view: View, private val channel: Channel) : View.OnAttachStateChangeListener {
         val animators = mutableListOf<ValueAnimator>()
-        val blur = SurfaceBlur(view) { runtime.log(it) }
+        val blur = SurfaceBlur(view, minUpdateIntervalMs = 16L) { runtime.log(it) }
         private val token = NotificationScope.token(view, ordinaryScene = false)
         private val revision = configurationRevision
         private var finished = false

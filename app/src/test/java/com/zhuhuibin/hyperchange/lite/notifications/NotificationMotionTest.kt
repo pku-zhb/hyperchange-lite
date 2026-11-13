@@ -70,6 +70,29 @@ class NotificationMotionTest {
         assertEquals(NotificationMotion.GroupFrame(0f, 1f), NotificationMotion.group(0, 6f, .95f))
     }
 
+    @Test fun groupSpacingRoundsOnceBeforeAccumulatingCardOffsets() {
+        // A 6 dp step at density 1.25 is 8 physical pixels, including the half-pixel tie.
+        val step = NotificationMotion.groupSpacingPx(6f, 1.25f)
+        assertEquals(8f, step, 0f)
+        assertEquals(16f, NotificationMotion.group(2, step, .95f).offsetDp, 0f)
+        assertEquals(0f, NotificationMotion.groupSpacingPx(0f, 3f), 0f)
+    }
+
+    @Test fun headsUpExitFlipAndBlurKeepTheirMinimumFrameBoundary() {
+        assertEquals(32L, NotificationMotion.headsUpDelay(0L, entering = true, scale = true))
+        assertEquals(32L, NotificationMotion.headsUpDelay(0L, entering = false, scale = false))
+        assertEquals(0L, NotificationMotion.headsUpDelay(0L, entering = false, scale = true))
+        assertEquals(150L, NotificationMotion.headsUpDelay(150L, entering = false, scale = false))
+    }
+
+    @Test fun blurQuantizationUsesOemPositiveHalfUpRounding() {
+        assertEquals(0f, NotificationMotion.blurRadius(0f), 0f)
+        assertEquals(0f, NotificationMotion.blurRadius(.99f), 0f)
+        assertEquals(2f, NotificationMotion.blurRadius(1f), 0f)
+        assertEquals(4f, NotificationMotion.blurRadius(3f), 0f)
+        assertEquals(50f, NotificationMotion.blurRadius(50f), 0f)
+    }
+
     @Test fun cancellationAndAnimationEndCannotDoubleCompleteRemoval() {
         var calls = 0
         val completion = Completion { calls++ }

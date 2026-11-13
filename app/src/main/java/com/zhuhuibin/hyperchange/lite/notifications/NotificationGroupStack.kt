@@ -182,7 +182,9 @@ internal class NotificationGroupStack {
         return if (count >= 2) count else 0
     }
 
-    private fun spacing(container: View): Float = prefs.number("notification_group_stack_spacing", 6f, 0f, 32f) * container.resources.displayMetrics.density
+    private fun spacing(container: View): Float = NotificationMotion.groupSpacingPx(
+        prefs.number("notification_group_stack_spacing", 6f, 0f, 32f), container.resources.displayMetrics.density,
+    )
 
     private fun height(container: View, count: Int): Int = children(container).filter { it.visibility != View.GONE }.take(count).mapIndexed { index, row ->
         val state = row.call("getViewState")

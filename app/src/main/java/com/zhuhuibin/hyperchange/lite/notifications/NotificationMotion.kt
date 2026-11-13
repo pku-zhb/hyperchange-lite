@@ -7,6 +7,7 @@ import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.sinh
 import kotlin.math.sqrt
+import kotlin.math.roundToInt
 import kotlin.math.pow
 
 /** Independent behavioral reconstruction; shared by system hooks and local previews. */
@@ -56,12 +57,20 @@ object NotificationMotion {
         return GroupFrame(i * spacingDp.coerceIn(0f, 32f), scaleStep.coerceIn(.5f, 1f).pow(i))
     }
 
+    /** OEM group geometry uses one rounded physical-pixel step for every card. */
+    fun groupSpacingPx(spacingDp: Float, density: Float): Float =
+        (spacingDp.coerceIn(0f, 32f) * density).roundToInt().toFloat()
+
+    /** Flip and blur retain a frame boundary even on exit; exit scale may start immediately. */
+    fun headsUpDelay(delayMs: Long, entering: Boolean, scale: Boolean): Long =
+        if (entering || !scale) delayMs.coerceAtLeast(32L) else delayMs
+
     /** Horizontal dismissal retains ownership from the first meaningful motion. */
     fun releasesTilt(dx: Float, dy: Float, media: Boolean): Boolean =
         (kotlin.math.abs(dx) >= 2f || kotlin.math.abs(dy) >= 2f) &&
             (media || kotlin.math.abs(dy) <= kotlin.math.abs(dx) * .3249197f)
 
-    fun blurRadius(value: Float): Float = if (value <= 0f) 0f else kotlin.math.round(value / 2f) * 2f
+    fun blurRadius(value: Float): Float = if (value <= 0f) 0f else (value / 2f).roundToInt() * 2f
 }
 
 /** Completion callbacks remain exactly-once across animation end, cancel and detach. */
