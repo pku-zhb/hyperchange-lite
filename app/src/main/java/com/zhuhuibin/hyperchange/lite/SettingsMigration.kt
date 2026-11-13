@@ -22,14 +22,17 @@ internal object SettingsMigration {
         "glass_shade_scale" to "glass_background_scale",
         "glass_shade_opacity" to "glass_background_opacity",
     )
+    // Later opt-ins must neither make an old full export incomplete nor turn a
+    // new partial edit into evidence of the legacy combined scopes.
+    private val laterScopeKeys = setOf(MEDIA_KEY, LOCKSCREEN_KEY, EDGE_GAP_KEY, "glass_heads_up")
 
     private val legacyKeys by lazy {
         (LiteCatalog.entries.map { it.key }.toSet() + LEGACY_VOLUME_OFFSET_KEY) -
-            (setOf(MEDIA_KEY, LOCKSCREEN_KEY, EDGE_GAP_KEY) + backdropKeys)
+            (laterScopeKeys + backdropKeys)
     }
     private val legacySnapshotKeys by lazy {
         LiteCatalog.entries.map { it.key }.toSet() -
-            (backdropKeys + setOf(MEDIA_KEY, LOCKSCREEN_KEY, EDGE_GAP_KEY))
+            (backdropKeys + laterScopeKeys)
     }
 
     /** Never writes preferences: upgraded hook processes need not wait for the app. */
@@ -75,7 +78,8 @@ internal object SettingsMigration {
         // Keep legacy card partials' scope migration, without turning a backdrop
         // edit into implicit media/lockscreen scope writes.
         val backdropOnly = values.keys.all { it in backdropKeys }
-        val migrateScopes = !backdropOnly && MEDIA_KEY in keys && LOCKSCREEN_KEY in keys
+        val hasScopeInput = values.keys.any { it in legacyKeys || it == MEDIA_KEY || it == LOCKSCREEN_KEY }
+        val migrateScopes = !backdropOnly && hasScopeInput && MEDIA_KEY in keys && LOCKSCREEN_KEY in keys
         // Old full exports shared these values across both layers. A card-only
         // preset or any partial import must never acquire an implicit whole-window edit.
         val migrateBackdrop = !backdropMigrated && keys.containsAll(backdropKeys) &&

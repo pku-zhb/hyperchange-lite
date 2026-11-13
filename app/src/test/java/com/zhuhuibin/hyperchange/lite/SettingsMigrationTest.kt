@@ -23,6 +23,29 @@ class SettingsMigrationTest {
         assertFalse(SettingsMigration.hasLocalState(emptyMap<String, Any>()))
     }
 
+    @Test fun aNewBannerOptInIsNotEvidenceOfLegacyCombinedScopes() {
+        for (enabled in listOf(false, true)) {
+            val onlyBanner = mapOf("glass_heads_up" to enabled)
+            assertRanges(SettingsMigration.resolve(onlyBanner), false, false)
+            val json = """{"format":"hyperchange-lite","version":1,"settings":{"glass_heads_up":$enabled}}"""
+            assertEquals(onlyBanner, SettingsCodec.decode(LiteCatalog.entries, json))
+        }
+    }
+
+    @Test fun aFrozenFullLegacyExportDoesNotNeedTheNewBannerKeyToMigrateItsBackdrop() {
+        val json = requireNotNull(javaClass.getResource("/hc-lite-0.1.3-full.json")).readText()
+        val raw = org.json.JSONObject(json).getJSONObject("settings")
+        assertEquals(107, raw.length())
+        assertFalse(raw.has("glass_heads_up"))
+        assertFalse(raw.has("glass_shade_enabled"))
+        val restored = SettingsCodec.decode(LiteCatalog.entries, json)
+        assertEquals(true, restored[SettingsMigration.BACKDROP_ENABLED_KEY])
+        assertEquals(40f, restored["glass_shade_blur"])
+        assertEquals(70f, restored["glass_shade_scale"])
+        assertEquals(50f, restored["glass_shade_opacity"])
+        assertFalse(restored.containsKey("glass_heads_up"))
+    }
+
     @Test fun legacyCombinedScopeTrueAndFalseMigrateIndependentlyFromLockscreen() {
         for (old in listOf(false, true)) {
             val values = SettingsMigration.resolve(mapOf("glass_notifications" to old))
