@@ -113,6 +113,7 @@ internal fun AboutPage(modifier: Modifier) {
             BasicComponent(title = "hc-lite", insideMargin = compactPreferenceMargin, endActions = { Text(version) })
         }
         Card(Modifier.fillMaxWidth()) {
+            DonationEntry()
             ArrowPreference(uiText("源代码"), insideMargin = compactPreferenceMargin,
                 onClick = { links.openUri("https://github.com/pku-zhb/hc-lite") })
             ArrowPreference(uiText("问题反馈"), insideMargin = compactPreferenceMargin,

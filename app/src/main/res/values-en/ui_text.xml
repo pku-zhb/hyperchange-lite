@@ -485,4 +485,13 @@
     <string name="ui_copy_blur_transition_duration">Blur transition duration</string>
     <string name="ui_heads_up_soft_glass">Soft glass for top notifications</string>
     <string name="ui_heads_up_soft_glass_summary">Use card glass for top banners; enable card material tuning and notification cards first.</string>
+    <string name="ui_copy_support_via_wechat">Support via WeChat</string>
+    <string name="ui_copy_wechat_donation_code">WeChat donation code</string>
+    <string name="ui_copy_save_to_gallery">Save to gallery</string>
+    <string name="ui_copy_saving">Saving…</string>
+    <string name="ui_copy_saved_to_gallery">Saved to gallery</string>
+    <string name="ui_copy_could_not_save_try_again">Could not save. Try again.</string>
+    <string name="ui_copy_could_not_load_image">Could not load image</string>
+    <string name="ui_copy_loading_image">Loading image</string>
+    <string name="ui_copy_close">Close</string>
 </resources>

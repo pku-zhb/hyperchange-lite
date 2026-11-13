@@ -17,6 +17,15 @@ internal object UiTextCatalog {
     private val scopeNote = Regex("^统一材质(开|关)；锁屏范围(开|关)（系统切换未模拟）$")
     private val sidebarNote = Regex("^统一侧栏(开|关)；系统侧栏配方未还原$")
     val resourceIds: Map<String, Int> = mapOf(
+        "微信赞赏" to R.string.ui_copy_support_via_wechat,
+        "微信赞赏码" to R.string.ui_copy_wechat_donation_code,
+        "保存到相册" to R.string.ui_copy_save_to_gallery,
+        "保存中…" to R.string.ui_copy_saving,
+        "已保存到相册" to R.string.ui_copy_saved_to_gallery,
+        "保存失败，请重试" to R.string.ui_copy_could_not_save_try_again,
+        "图片加载失败" to R.string.ui_copy_could_not_load_image,
+        "正在加载图片" to R.string.ui_copy_loading_image,
+        "关闭" to R.string.ui_copy_close,
         "顶部通知柔光玻璃" to R.string.ui_heads_up_soft_glass,
         "将顶部横幅改为卡片玻璃；需开启卡片材质调节与通知栏普通通知" to R.string.ui_heads_up_soft_glass_summary,
         "与其他模块共用" to R.string.ui_copy_use_with_other_modules,

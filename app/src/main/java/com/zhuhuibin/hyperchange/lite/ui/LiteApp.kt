@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -19,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -380,12 +383,13 @@ private fun PreviewPanel(repository: SettingsRepository, revision: Int, target: 
             if (refreshed) { view.refresh(); applied.revision = revision }
             if (changed || refreshed) view.previewFocusedEffect()
         })
-        Row(Modifier.align(Alignment.TopEnd).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.align(Alignment.TopEnd).padding(4.dp).background(Color.Black.copy(alpha = .45f), RoundedCornerShape(24.dp)),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             IconButton(onClick = { onWallpaperStyle(if (wallpaperUri != null) 0 else (wallpaperStyle + 1) % 4) }) {
-                Icon(PreviewIcons.palette, uiText("切换预览底图"), Modifier.size(20.dp))
+                Icon(PreviewIcons.palette, uiText("切换预览底图"), Modifier.size(20.dp), tint = Color.White)
             }
             IconButton(onClick = onChooseImage) {
-                Icon(PreviewIcons.image, uiText("选择预览图片"), Modifier.size(20.dp))
+                Icon(PreviewIcons.image, uiText("选择预览图片"), Modifier.size(20.dp), tint = Color.White)
             }
         }
     }

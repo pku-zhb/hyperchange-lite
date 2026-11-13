@@ -485,4 +485,13 @@
     <string name="ui_copy_blur_transition_duration">模糊过渡耗时</string>
     <string name="ui_heads_up_soft_glass">顶部通知柔光玻璃</string>
     <string name="ui_heads_up_soft_glass_summary">将顶部横幅改为卡片玻璃；需开启卡片材质调节与通知栏普通通知</string>
+    <string name="ui_copy_support_via_wechat">微信赞赏</string>
+    <string name="ui_copy_wechat_donation_code">微信赞赏码</string>
+    <string name="ui_copy_save_to_gallery">保存到相册</string>
+    <string name="ui_copy_saving">保存中…</string>
+    <string name="ui_copy_saved_to_gallery">已保存到相册</string>
+    <string name="ui_copy_could_not_save_try_again">保存失败，请重试</string>
+    <string name="ui_copy_could_not_load_image">图片加载失败</string>
+    <string name="ui_copy_loading_image">正在加载图片</string>
+    <string name="ui_copy_close">关闭</string>
 </resources>
