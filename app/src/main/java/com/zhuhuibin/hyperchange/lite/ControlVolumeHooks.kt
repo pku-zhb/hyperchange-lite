@@ -33,6 +33,7 @@ class ControlVolumeHooks {
     private val refreshing = ThreadLocal<Boolean>()
     private val radiusDispatch = ThreadLocal<String>()
     private val sliderRefresh = ThreadLocal<Boolean>()
+    private val sliderResourceOwner = ThreadLocal<Any>()
     private var pendingRefresh: Runnable? = null
 
     fun install(runtime: HookRuntime) {
@@ -85,7 +86,7 @@ class ControlVolumeHooks {
                         val args = chain.args.toTypedArray()
                         args[0] = baseline.resolve(incoming,
                             if (active) number(key, 26f) * view.resources.displayMetrics.density else null,
-                            refreshing.get() != true)
+                            refreshing.get() != true, freshResourceValue = sliderResourceOwner.get() === receiver)
                         val previous = radiusDispatch.get()
                         radiusDispatch.set(key)
                         try {
@@ -145,7 +146,16 @@ class ControlVolumeHooks {
             val entries = type.declaredConstructors.toList() + methods
             entries.forEachIndexed { index, method ->
                 runtime.hook(method, "slider-radius:lifecycle:$name:$index") { chain ->
-                    val result = chain.proceed()
+                    // The retained updateSize reads both radii directly from current
+                    // Resources. Equal px values are still a new native baseline.
+                    val previous = sliderResourceOwner.get()
+                    val fresh = method is Method && method.name == "updateSize"
+                    if (fresh) sliderResourceOwner.set(chain.thisObject)
+                    val result = try { chain.proceed() } finally {
+                        if (fresh) {
+                            if (previous == null) sliderResourceOwner.remove() else sliderResourceOwner.set(previous)
+                        }
+                    }
                     runCatching { update(chain.thisObject) }
                         .onFailure { runtime.log("Slider radius retained its native layout", it) }
                     result

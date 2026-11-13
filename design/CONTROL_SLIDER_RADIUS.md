@@ -25,13 +25,16 @@ under the owning development cache, not redistributed as decompiled source.
   prevents lifecycle recursion. No drawing/touch hook or per-frame tree scan is
   added. Disabled settings do not acquire new lifecycle ownership.
 - The existing current-property baseline restores each channel independently;
-  a new size/density write becomes its new native baseline. Secondary volume
+  a verified updateSize resource write becomes its new native baseline even if
+  the px value equals the last override (24dp to sw340dp's 48dp is a real case).
+  Ordinary self-replays cannot acquire that permission. Secondary volume
   getter routing now resolves its actual secondary container and progress radius.
 - Preference refreshes are coalesced and limited to radius/volume edits, avoiding
   unrelated material-slider writes repeatedly replaying native radius calls.
 
-Two focused state regressions check independent track/fill restoration, resource
-replay without baseline recapture, and a later native density/size change. Full
+Focused state regressions check independent track/fill restoration, resource
+replay without baseline recapture, and native density/qualifier changes including
+same-value native inputs. Full
 Android compilation/lint and native visual acceptance are separate checks. This
 iteration performs no phone access, installation or scope restart. The source
 fix does not claim that an unobserved third-party direct native write is intercepted.

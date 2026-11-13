@@ -24,4 +24,16 @@ class SliderRadiusLifecycleTest {
         assertEquals(32f, progress.resolve(80f, null), 0f)
     }
 
+    @Test fun foldingIntoTheQualifierMatchingTheOldOverrideStillUpdatesNativeBaseline() {
+        val radius = RadiusBaseline(24f)
+        radius.resolve(24f, 48f)
+        // This ROM changes universal radius from 24dp to 48dp at sw340dp.
+        radius.resolve(48f, 64f, freshResourceValue = true)
+        assertEquals(48f, radius.resolve(64f, null), 0f)
+        // Our own refresh must still not adopt its output as native.
+        radius.resolve(48f, 64f)
+        radius.resolve(64f, 80f, acceptNativeUpdate = false, freshResourceValue = true)
+        assertEquals(48f, radius.resolve(80f, null), 0f)
+    }
+
 }
