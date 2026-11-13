@@ -65,3 +65,15 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
   Verify the downloaded file hash without opening the file manager or installer UI.
 
 New APK filenames use the short project name and ordinary X.Y.Z version, without preview labels or source IDs. Keep source identity inside the APK and local receipts. Preserve historical APKs and names.
+
+## Personal APK archive retention
+
+Keep at most the latest five versions per module, including the current version,
+in `~/Harbor Drive/02 Personal Files/Miduo/`. Group historical and short-name
+aliases as one module; sort by semantic version, not filename text or mtime.
+Retire matching old version-specific test notes with their APKs. Keep third-party
+inputs and the repository's `releases/local/` packages/receipts outside this cap.
+Use Obsidian's local vault trash, never permanent deletion. The CLI delete command
+currently selects system trash; for explicit local trash use the official CLI
+`eval` entry with `app.vault.trash(file, false)`. Verify source absence and retained
+file hashes; on interruption inspect the actual result before retrying.
