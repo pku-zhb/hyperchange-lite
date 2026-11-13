@@ -4,6 +4,21 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.6 targets the actual whole-window compositor and native backdrop
+controllers, with independent blur and dimming controls and a full-panel preview.
+Card glass remains separate. Exact current native writers restore owned backdrop
+changes at the shade/heads-up handoff instead of replaying a previous scene.
+Settings now group scopes, hide inactive children, fold advanced optics/curves,
+show necessary prerequisites and baselines, and connect local preview wallpapers.
+The optional **顶部通知柔光玻璃** switch restores upstream's separate banner-glass
+style; it defaults off and requires card tuning plus the notification range.
+Native banner tint tuning and scene-specific previews are corrected too. Existing
+setting keys, defaults and preset values remain upgrade-compatible. See
+[settings presentation](design/SETTINGS_UX.md),
+[whole-window ownership](design/WHOLE_WINDOW_BACKDROP_016.md) and
+[banner materials](design/BANNER_MATERIAL.md). About also provides the owner's
+WeChat donation image with gallery saving. GPU rendering still needs owner acceptance.
+
 Version 0.1.5 removes generated-view-ID exception storms, coalesces slider writes,
 reads each material snapshot once, and keeps the current volume shape through its
 native dismiss animation. Whole-screen tint adjusts mode 106 while preserving

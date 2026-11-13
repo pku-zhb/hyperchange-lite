@@ -1,5 +1,45 @@
 # Host validation
 
+## 0.1.6 real background channels, readable settings and banner glass
+
+- All 281 JVM tests in 49 suites pass with no failures, errors or skips.
+  `:app:lintDebug` and `git diff --check` pass. Existing non-blocking platform
+  warnings remain. Android compilation includes the actual Miuix UI, Xposed and
+  OEM reflection adapters; focused stubs are not the final integration result.
+- The retained native controllers establish the real compositor radius and
+  separate sampler/blend/solid channels. The expanded, unlocked-panel gate remains
+  strict. Only actual changed writes gain ownership; current native owners
+  reclaim exact View/window/surface channels on release, without saved-scene
+  replay or an extra full refresh when the master is off. Tests cover same-value
+  native supersession, window/surface replacement, detach, cancelled delivery,
+  reentry/once consumption and valid-surface checks.
+- Banner tint consumes the card-opacity control. The independent banner-glass
+  opt-in preserves upstream behavior and requires all four permissions; default
+  off retains OEM style. Its preview now distinguishes the verified native
+  light/dark banner token from the opt-in normal-card recipe. The scheduler
+  accessor resolves inherited interface default methods instead of silently
+  falling back to native animations.
+- UI tests cover every visible control/group/note, prerequisites, mirrored
+  masters, default-collapsed advanced controls, independent backdrop routing and
+  complete default/English/Chinese text. Numeric controls retain their ranges,
+  exact input and units. Existing 111 setting keys/defaults and six preset values
+  were compared; one new opt-in is added without renaming the old schema.
+- A frozen 107-setting pre-separation fixture checks full old-backup migration
+  without the new banner key. A new-only partial edit does not acquire legacy
+  media/lockscreen scopes or an implicit whole-background edit. Backup, reset,
+  local/remote binding and material-only preset coverage remain in the full suite.
+- The About donation entry embeds the owner's unchanged raw PNG and supports
+  background MediaStore saving with pending-row failure cleanup. Both maintained
+  apps' source asset hashes match the supplied image; final APK verification also
+  checks the embedded raw bytes. Actual gallery saving/QR recognition remains
+  owner acceptance.
+- No phone GUI, screenshot, installation, scope restart, device-setting edit or
+  reboot was used. Read-only state/source evidence is separate from visual
+  acceptance. The final signed package is retained from the clean pushed source;
+  the optimized Release check and source/signature/hash checks use the archive
+  workflow. APKs may be copied to Download without installing them.
+
+
 ## 0.1.4 independent layers and settings usability
 
 - All 210 JVM tests in 36 suites pass with no failures, errors or skips.

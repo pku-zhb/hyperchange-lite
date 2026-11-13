@@ -4,28 +4,32 @@ The App uses Miuix native components, semantic colors and the system typeface.
 Root navigation has **Home**, **Settings**, and **About**, following the owner's
 HMC Duo navigation model without adding a second visual theme system.
 
-Home contains connection status and five feature destinations: scopes, materials,
-corners, notification animations and volume behavior. Settings owns App theme,
+Home contains connection status and six feature destinations: scopes, card materials,
+pull-down background, corners, notification animations and volume behavior. Settings owns App theme,
 language, import/export and full reset. About owns version, fork, issue tracker,
-upstream and license links. Import/export are not feature-page actions.
+upstream, license links and the owner's WeChat donation image. Import/export are not feature-page actions.
 
 Adjustment editors use one layout at every window width:
 
 ```text
 App bar
-Pinned rendered sample
+Pinned rendered sample with short action hint and local-background controls
 Pinned horizontally scrollable project tabs when needed
-Scrollable peer setting cards
+Scrollable purpose-based setting groups with advanced controls folded
 ```
 
-There are no external subsection headings, persistent subtitles, preview captions
-or separate scene picker. Each setting has one title; compatibility is a short
-title marker. Numeric controls use reduced vertical padding and 44 dp operation
-regions, retaining exact numeric entry and validation dialogs.
+Necessary summaries explain prerequisites, direction/baseline, units and module
+ownership; self-explanatory controls remain title-only. Inactive child controls
+hide without resetting their values. Advanced optics and animation curves begin
+collapsed. Static notes have their own text style instead of resembling controls.
+Numeric controls retain compact padding, 44 dp operation regions, exact input,
+default reset and visible default/slider/legal ranges. See [the current settings
+specification](SETTINGS_UX.md) for the detailed presentation contract.
 
 Scopes are a separate Home destination with controls only: no rendered sample
 or preview allocation. Material tabs separate glass appearance,
-card sampling, full-screen background and card presets. Corner tabs separate
+card background and presets. The independent pull-down background has its own
+Home destination and full-panel preview. Corner tabs separate
 notification, control-center and volume radii. Legacy-only settings never become
 visible merely because they appear in an imported backup.
 
