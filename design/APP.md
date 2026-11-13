@@ -6,10 +6,15 @@ Every feature has one vertical layout on narrow, wide and landscape windows:
 ```text
 App bar
 Pinned rendered sample only
-Scrollable project selector and title-only controls
+Pinned horizontally scrollable project tabs
+Scrollable title-only controls
 ```
 
 The same structure applies to material/radius, notification effects and volume.
+Each project is a directly selectable tab, using Miuix's native scrollable TabRow.
+Selecting a tab updates its representative preview and starts its controls at the
+beginning. Only the rendered sample and tab row remain above the scrolling list.
+Tab labels retain font scaling, a minimum touch height and selection semantics.
 There is no independent preview-scene selector, caption, status card inside the
 preview, separate preview page, or permanently visible playback controls.
 
@@ -25,6 +30,7 @@ retains non-visible accessibility information; necessary numeric validation and
 reset confirmation remain dialogs. Preview native/schematic metadata lives in
 accessibility rather than occupying the adjustment area.
 
-Preference keys, values, defaults, full numeric validation, common slider windows,
-import/export and the existing launcher/LSP entry remain intact. Preview behavior
+Existing values, full numeric validation, common slider windows, import/export
+and the launcher/LSP entry remain compatible. The new physical-pixel volume edge
+gap migrates the old OEM-dependent horizontal offset without exporting the alias. Preview behavior
 cannot enable hooks, restart scopes or change a system effect by itself.

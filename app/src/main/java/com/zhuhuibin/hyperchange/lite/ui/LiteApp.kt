@@ -17,21 +17,22 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.zhuhuibin.hyperchange.lite.*
 import com.zhuhuibin.hyperchange.lite.preview.GlassPlayground
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -136,16 +137,19 @@ private fun FeaturePage(
     val specs = category?.settings ?: feature.settings.filter { it.group == projects[index].first }
     val fallback = specs.firstOrNull() ?: LiteCatalog.entries.first { it.key == "glass_refraction_blur" }
     var focusedKey by rememberSaveable(feature.name) { mutableStateOf(fallback.key) }
-    val focused = LiteCatalog.entries.firstOrNull { it.key == focusedKey } ?: fallback
+    val focused = specs.firstOrNull { it.key == focusedKey } ?: fallback
     val target = previewTargetForSetting(focused, values)
-    val list = rememberLazyListState()
-    val scope = rememberCoroutineScope()
+    // Each project opens at its first setting, without carrying an old list's scroll or focus.
+    val list = key(project) { rememberLazyListState() }
     LaunchedEffect(list, project) {
         snapshotFlow {
             list.isScrollInProgress to list.layoutInfo.visibleItemsInfo
                 .firstOrNull { (it.key as? String)?.startsWith("setting:") == true }?.key
         }.distinctUntilChanged().collect { (scrolling, key) ->
-            if (scrolling && key is String) focusedKey = key.removePrefix("setting:")
+            if (scrolling && key is String) {
+                val visibleKey = key.removePrefix("setting:")
+                if (specs.any { it.key == visibleKey }) focusedKey = visibleKey
+            }
         }
     }
     fun write(spec: LiteSetting, value: Any) { focusedKey = spec.key; onWrite(spec, value) }
@@ -157,21 +161,17 @@ private fun FeaturePage(
             PreviewPanel(repository, revision, target, night, wallpaperUri, wallpaperStyle,
                 previewHeight,
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+            ProjectTabs(projects.map { it.second }, index, { selected ->
+                if (selected != index) {
+                    project = projects[selected].first
+                    val first = if (feature == Feature.MATERIAL) MaterialCategory.entries[selected].settings.firstOrNull()
+                        else feature.settings.firstOrNull { it.group == project }
+                    focusedKey = first?.key ?: "glass_refraction_blur"
+                }
+            }, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item("project") {
-                    Card(Modifier.fillMaxWidth()) {
-                        WindowDropdownPreference(title = "项目", items = projects.map { it.second }, selectedIndex = index,
-                            onSelectedIndexChange = { selected ->
-                                project = projects[selected].first
-                                scope.launch { list.scrollToItem(0) }
-                                val first = if (feature == Feature.MATERIAL) MaterialCategory.entries[selected].settings.firstOrNull()
-                                    else feature.settings.firstOrNull { it.group == project }
-                                focusedKey = first?.key ?: "glass_refraction_blur"
-                            })
-                    }
-                }
                 if (category == MaterialCategory.PRESETS) item("presets") {
                     GlassPresetControls(values, repository.hasGlassPresetUndo, onApply, onUndo)
                 } else {
@@ -194,6 +194,25 @@ private fun FeaturePage(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ProjectTabs(titles: List<String>, selected: Int, onSelected: (Int) -> Unit, modifier: Modifier) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Bold)
+    val labels = titles.map { measurer.measure(it, style = style, maxLines = 1).size }
+    BoxWithConstraints(modifier) {
+        val tabWidth = (with(density) { labels.maxOf { it.width }.toDp() } + 24.dp).coerceAtMost(maxWidth)
+        TabRow(
+            tabs = titles,
+            selectedTabIndex = selected,
+            onTabSelected = onSelected,
+            minWidth = tabWidth,
+            maxWidth = maxOf(tabWidth, TabRowDefaults.TabRowMaxWidth),
+            height = maxOf(44.dp, with(density) { labels.maxOf { it.height }.toDp() } + 16.dp),
+        )
     }
 }
 

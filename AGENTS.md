@@ -27,8 +27,10 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
 - Keep UI prose in Chinese with simple labels. Recreate preview behavior using our own
   drawing/content and actual OEM glass APIs; distinguish fallback previews honestly.
 - The settings App uses actual Miuix Compose components. Keep a clear feature home,
-  vertically grouped settings and contextual previews; do not return to an endless
-  horizontal group strip. Preserve the application ID and preference keys on upgrades.
+  vertically grouped controls and contextual previews. The owner now requests a
+  horizontally scrollable, single-tap project tab row under the pinned preview in
+  every second-level editor. Preserve the application ID and migrate renamed
+  preference keys for upgrades and old preset imports.
   The owner confirmed the launcher icon works; retain its existing launcher/LSP entry.
 - Global class-loading callbacks must keep their Java-only, callback-entry guard and
   defer adapter installation; see `design/STARTUP_SAFETY.md`. Preserve the upstream's
