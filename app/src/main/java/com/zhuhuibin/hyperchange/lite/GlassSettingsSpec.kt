@@ -7,6 +7,7 @@ object GlassSettingsSpec {
     val entries: List<LiteSetting> = buildList {
         add(LiteSetting.toggle("glass_enabled", "卡片材质调节", "柔光玻璃", summary = "调节已开启范围内的卡片；下拉背景有独立开关"))
         add(LiteSetting.toggle("glass_notifications", "通知栏普通通知", "柔光范围", true, summary = "含顶部横幅；锁屏需另开“锁屏通知材质与动画”"))
+        add(LiteSetting.toggle("glass_heads_up", "顶部通知柔光玻璃", "柔光范围", summary = "将顶部横幅改为卡片玻璃；需开启卡片材质调节与通知栏普通通知"))
         add(LiteSetting.toggle(SettingsMigration.MEDIA_KEY, "音乐卡片材质", "柔光范围", summary = "注意兼容：使用 HMC 自定义播放器背景时关闭"))
         add(LiteSetting.toggle("glass_control_center", "控制中心卡片与磁贴", "柔光范围", true))
         add(LiteSetting.toggle("glass_volume", "侧边音量条与展开面板", "柔光范围", true))

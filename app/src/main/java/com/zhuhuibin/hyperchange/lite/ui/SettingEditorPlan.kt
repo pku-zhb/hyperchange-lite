@@ -31,7 +31,7 @@ internal fun editorItems(category: MaterialCategory?, specs: List<LiteSetting>):
     val keys = specs.map { it.key }
     return when (category) {
         MaterialCategory.SCOPES -> listOf(
-            group("card-scopes", "卡片材质生效范围", listOf("glass_enabled", "glass_notifications", "glass_control_center", "glass_volume", "glass_unify_notifications")),
+            group("card-scopes", "卡片材质生效范围", listOf("glass_enabled", "glass_notifications", "glass_heads_up", "glass_control_center", "glass_volume", "glass_unify_notifications")),
             group("backdrop-scope", "面板展开时的全屏背景", listOf("glass_shade_enabled")),
             group("independent-scopes", "负一屏与侧边栏", listOf("glass_assistant", "glass_sidebar", "glass_sidebar_unify")),
             EditorItem.Group("shared-scopes", "与其他模块共用", rows("glass_media", "notification_lockscreen_effects") +

@@ -483,4 +483,6 @@
     <string name="ui_copy_clears_on_entry_and_blurs_on_exit_0_disables_blur">Clears on entry and blurs on exit; 0 disables blur.</string>
     <string name="ui_copy_blur_transition_delay">Blur transition delay</string>
     <string name="ui_copy_blur_transition_duration">Blur transition duration</string>
+    <string name="ui_heads_up_soft_glass">Soft glass for top notifications</string>
+    <string name="ui_heads_up_soft_glass_summary">Use card glass for top banners; enable card material tuning and notification cards first.</string>
 </resources>

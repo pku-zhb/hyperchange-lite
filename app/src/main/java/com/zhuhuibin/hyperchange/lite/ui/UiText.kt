@@ -17,6 +17,8 @@ internal object UiTextCatalog {
     private val scopeNote = Regex("^统一材质(开|关)；锁屏范围(开|关)（系统切换未模拟）$")
     private val sidebarNote = Regex("^统一侧栏(开|关)；系统侧栏配方未还原$")
     val resourceIds: Map<String, Int> = mapOf(
+        "顶部通知柔光玻璃" to R.string.ui_heads_up_soft_glass,
+        "将顶部横幅改为卡片玻璃；需开启卡片材质调节与通知栏普通通知" to R.string.ui_heads_up_soft_glass_summary,
         "与其他模块共用" to R.string.ui_copy_use_with_other_modules,
         "仅改变本设置应用的外观" to R.string.ui_copy_changes_this_settings_app_only,
         "从文件恢复设置" to R.string.ui_copy_restore_settings_from_file,

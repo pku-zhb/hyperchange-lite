@@ -23,7 +23,7 @@ enum class MaterialCategory(val title: String, val feature: Feature) {
 
     companion object {
         private val sharedScopeKeys = setOf(
-            "glass_enabled", "glass_notifications", SettingsMigration.MEDIA_KEY,
+            "glass_enabled", "glass_notifications", "glass_heads_up", SettingsMigration.MEDIA_KEY,
             "glass_control_center", "glass_volume", "glass_shade", "glass_unify_notifications",
             "glass_assistant", "glass_sidebar", "glass_sidebar_unify", SettingsMigration.LOCKSCREEN_KEY,
         )

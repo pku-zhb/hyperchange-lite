@@ -33,11 +33,18 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
   preference keys for upgrades and old preset imports.
   Keep Home/Settings/About root navigation; scopes, materials and corners are separate
   Home destinations. Import/export, theme and language belong in Settings. Editors
-  use compact peer cards without outside subgroup headings or persistent subtitles.
+  use compact controls, short necessary summaries and purpose-based groups. Hide
+  inactive child parameters and collapse advanced optics/curves by default. Keep
+  prerequisites beside their controls; mirror existing masters without changing
+  catalog ownership or saved keys. Static notes must not resemble controls.
   Control-center corner samples change only after actual edits, never from scroll
   focus. Keep Chinese/English resources complete for both Compose and native previews.
   The owner requested new unified launcher art for hc-lite and hmc-duo; preserve the
   existing launcher/LSP entry and adaptive/round/monochrome resource contracts.
+  Card materials and the actual pull-down backdrop have separate destinations.
+  Background previews must show a full panel over App content, not a glass card.
+  Preview hints are short user actions; native diagnostic status stays accessible
+  without occupying the visual editor. Preview wallpaper controls remain local.
 - Global class-loading callbacks must keep their Java-only, callback-entry guard and
   defer adapter installation; see `design/STARTUP_SAFETY.md`. Preserve the upstream's
   critical startup ordering when pruning features instead of rewriting it casually.

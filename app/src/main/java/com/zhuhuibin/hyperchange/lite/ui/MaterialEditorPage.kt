@@ -35,6 +35,7 @@ internal fun previewTargetForSetting(
         key.startsWith("glass_sidebar") -> GlassPlayground.Scene.SIDEBAR
         key == "glass_assistant" -> GlassPlayground.Scene.WIDGET
         key == SettingsMigration.MEDIA_KEY || key == "notification_press_tilt_media_enabled" -> GlassPlayground.Scene.MEDIA
+        key == "glass_heads_up" -> GlassPlayground.Scene.HEADS_UP
         key == "glass_shade" || key.startsWith("glass_shade_") -> GlassPlayground.Scene.SHADE
         key in cardBackgroundKeys -> systemCore()
         key.startsWith("cc_") || key == "glass_control_center" -> GlassPlayground.Scene.CONTROL
