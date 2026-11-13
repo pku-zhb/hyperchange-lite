@@ -10,16 +10,18 @@ internal data class SettingPreviewTarget(
     val scene: GlassPlayground.Scene,
     val focusGroup: String,
     val focusKey: String,
+    val sampleFocusKey: String = "",
 )
 
-internal fun previewTargetForSetting(spec: LiteSetting, values: Map<String, *> = emptyMap<String, Any>()): SettingPreviewTarget {
+internal fun previewTargetForSetting(
+    spec: LiteSetting, values: Map<String, *> = emptyMap<String, Any>(), editedKey: String? = null,
+): SettingPreviewTarget {
     val key = spec.key
     fun flag(key: String, default: Boolean = false) = values[key] as? Boolean ?: default
     fun systemCore(): GlassPlayground.Scene = when {
         flag("glass_notifications", true) -> GlassPlayground.Scene.NOTIFICATION
         flag("glass_control_center", true) -> GlassPlayground.Scene.CONTROL
         flag("glass_volume", true) -> GlassPlayground.Scene.VOLUME
-        flag("glass_shade", true) -> GlassPlayground.Scene.SHADE
         flag(SettingsMigration.MEDIA_KEY) -> GlassPlayground.Scene.MEDIA
         else -> GlassPlayground.Scene.NOTIFICATION
     }
@@ -33,8 +35,8 @@ internal fun previewTargetForSetting(spec: LiteSetting, values: Map<String, *> =
         key.startsWith("glass_sidebar") -> GlassPlayground.Scene.SIDEBAR
         key == "glass_assistant" -> GlassPlayground.Scene.WIDGET
         key == SettingsMigration.MEDIA_KEY || key == "notification_press_tilt_media_enabled" -> GlassPlayground.Scene.MEDIA
-        key == "glass_shade" -> GlassPlayground.Scene.SHADE
-        key.startsWith("glass_background_") -> if (flag("glass_shade", true)) GlassPlayground.Scene.SHADE else systemCore()
+        key == "glass_shade" || key.startsWith("glass_shade_") -> GlassPlayground.Scene.SHADE
+        key in cardBackgroundKeys -> systemCore()
         key.startsWith("cc_") || key == "glass_control_center" -> GlassPlayground.Scene.CONTROL
         key.startsWith("volume_") || key == "glass_volume" -> GlassPlayground.Scene.VOLUME
         key.startsWith("notification_heads_up_") -> GlassPlayground.Scene.HEADS_UP
@@ -44,18 +46,24 @@ internal fun previewTargetForSetting(spec: LiteSetting, values: Map<String, *> =
         key == "glass_enabled" -> systemCore()
         else -> GlassPlayground.Scene.NOTIFICATION
     }
-    return SettingPreviewTarget(scene, spec.group, key)
+    val sampleFocus = editedKey?.takeIf {
+        scene == GlassPlayground.Scene.CONTROL && it.startsWith("cc_") && it.endsWith("_radius")
+    }.orEmpty()
+    // Scrolling between CC radius rows must not change the target at all: even
+    // a same-sample focus change would cancel/reapply native material and flash.
+    val effectKey = if (key.startsWith("cc_")) sampleFocus else key
+    return SettingPreviewTarget(scene, spec.group, effectKey, sampleFocus)
 }
 
 internal fun materialSceneForSetting(spec: LiteSetting): GlassPlayground.Scene = previewTargetForSetting(spec).scene
 
 internal fun materialSceneForCategory(category: MaterialCategory): GlassPlayground.Scene = when (category) {
-    MaterialCategory.BACKGROUND -> GlassPlayground.Scene.SHADE
+    MaterialCategory.SHADE -> GlassPlayground.Scene.SHADE
     MaterialCategory.CONTROL -> GlassPlayground.Scene.CONTROL
     MaterialCategory.VOLUME -> GlassPlayground.Scene.VOLUME
-    MaterialCategory.ASSISTANT -> GlassPlayground.Scene.WIDGET
     else -> GlassPlayground.Scene.NOTIFICATION
 }
 
-internal fun settingDisplayTitle(spec: LiteSetting): String = spec.title +
-    if (spec.key == SettingsMigration.MEDIA_KEY || spec.key == SettingsMigration.LOCKSCREEN_KEY) "（注意兼容）" else ""
+internal fun settingDisplayTitle(
+    spec: LiteSetting, title: String = spec.title, compatibility: String = "（注意兼容）",
+): String = title + if (spec.key == SettingsMigration.MEDIA_KEY || spec.key == SettingsMigration.LOCKSCREEN_KEY) compatibility else ""

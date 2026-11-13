@@ -17,14 +17,15 @@ internal fun GlassPresetControls(values: Map<String, *>, hasUndo: Boolean, onApp
             runCatching { spec.validate(values[key] ?: spec.defaultValue) == expected }.getOrDefault(false)
         } == true
     } }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Card(Modifier.fillMaxWidth()) {
             builtInGlassPresets.forEach { preset ->
-                ArrowPreference(preset.title + if (preset.id == current?.id) " ✓" else "", onClick = { onApply(preset) })
+                ArrowPreference(uiText(preset.title) + if (preset.id == current?.id) " ✓" else "",
+                    insideMargin = compactPreferenceMargin, onClick = { onApply(preset) })
             }
         }
         if (hasUndo) Card(Modifier.fillMaxWidth()) {
-            ArrowPreference("还原试用前材质", onClick = onUndo)
+            ArrowPreference(uiText("还原试用前材质"), insideMargin = compactPreferenceMargin, onClick = onUndo)
         }
     }
 }

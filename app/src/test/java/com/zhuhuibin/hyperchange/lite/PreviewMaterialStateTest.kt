@@ -3,6 +3,7 @@ package com.zhuhuibin.hyperchange.lite
 import com.zhuhuibin.hyperchange.lite.glass.SoftGlassSettings
 import com.zhuhuibin.hyperchange.lite.preview.previewMaterialState
 import com.zhuhuibin.hyperchange.lite.preview.previewRadius
+import com.zhuhuibin.hyperchange.lite.preview.previewSamplingInputs
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -16,7 +17,7 @@ class PreviewMaterialStateTest {
         val sceneKeys = mapOf(
             "NOTIFICATION" to "glass_notifications", "HEADS_UP" to "glass_notifications",
             "MEDIA" to SettingsMigration.MEDIA_KEY, "CONTROL" to "glass_control_center",
-            "VOLUME" to "glass_volume", "SHADE" to "glass_shade",
+            "VOLUME" to "glass_volume",
         )
         sceneKeys.forEach { (scene, key) ->
             val off = previewMaterialState(scene, mapOf(key to false), saved, true)
@@ -25,6 +26,73 @@ class PreviewMaterialStateTest {
             val on = previewMaterialState(scene, mapOf(key to true), saved, true)
             assertTrue("$scene must permit tuning in its enabled range", on.settings.enabled)
         }
+    }
+
+    @Test fun wholePreviewUsesItsOwnValuesAndEnableFlagWhenCardValuesDiffer() {
+        val values = mapOf<String, Any>(
+            SettingsMigration.BACKDROP_VERSION_KEY to 1,
+            SettingsMigration.BACKDROP_ENABLED_KEY to true,
+            "glass_enabled" to false, "glass_shade" to false,
+            "glass_background_blur" to 160f, "glass_background_scale" to 60f, "glass_background_opacity" to 130f,
+            "glass_shade_blur" to 35f, "glass_shade_scale" to 24f, "glass_shade_opacity" to 75f,
+        )
+        val shade = previewMaterialState("SHADE", values, saved.copy(enabled = false), true)
+        assertTrue(shade.settings.enabled)
+        assertEquals(35, shade.settings.backgroundBlur)
+        assertEquals(24, shade.settings.backgroundScale)
+        assertEquals(75, shade.settings.backgroundOpacity)
+        assertEquals(100, shade.settings.refractionBlur)
+        assertTrue(shade.settings.adjustments.values.all { it == 0 })
+        assertTrue(shade.scopeNote.contains("不使用卡片折射"))
+        val card = previewMaterialState("NOTIFICATION", values, saved, true)
+        assertEquals(160, card.settings.backgroundBlur)
+        assertEquals(60, card.settings.backgroundScale)
+        assertEquals(130, card.settings.backgroundOpacity)
+        assertEquals(saved.adjustments, card.settings.adjustments)
+    }
+
+    @Test fun wholeToggleDoesNotFollowCardMasterOrForcedLocalCardPreviewMode() {
+        val values = mapOf<String, Any>(
+            SettingsMigration.BACKDROP_VERSION_KEY to 1,
+            SettingsMigration.BACKDROP_ENABLED_KEY to false,
+            "glass_enabled" to true, "glass_shade" to true,
+            "glass_shade_blur" to 35f,
+        )
+        for (respectScopes in listOf(false, true)) {
+            val shade = previewMaterialState("SHADE", values, saved, respectScopes)
+            assertFalse(shade.settings.enabled)
+            assertEquals(35, shade.settings.backgroundBlur)
+            assertTrue(shade.scopeStatus.contains("已关闭"))
+        }
+        assertFalse(previewMaterialState("SHADE", emptyMap<String, Any>(), saved, true).settings.enabled)
+    }
+
+    @Test fun wholePreviewUsesTheSameLegacyMigrationAsTheRuntime() {
+        val old = mapOf("glass_enabled" to true, "glass_shade" to true,
+            "glass_background_blur" to 42f, "glass_background_scale" to 18f, "glass_background_opacity" to 67f)
+        val shade = previewMaterialState("SHADE", old, saved.copy(enabled = false), true)
+        assertTrue(shade.settings.enabled)
+        assertEquals(42, shade.settings.backgroundBlur)
+        assertEquals(18, shade.settings.backgroundScale)
+        assertEquals(67, shade.settings.backgroundOpacity)
+        assertFalse(previewMaterialState("SHADE", old + ("glass_shade" to false), saved, true).settings.enabled)
+    }
+
+    @Test fun nativeWholeSamplingInputsCannotAcquireCardRefraction() {
+        val inputs = previewSamplingInputs(saved.copy(refractionBlur = 190), wholeWindow = true)
+        assertEquals(64, inputs.backgroundBlur)
+        assertEquals(.045f, inputs.backgroundScale, .000001f)
+        assertEquals(130, inputs.opacity)
+        assertNull(inputs.smallRefractionBlur)
+        assertNull(inputs.bigRefractionBlur)
+        val card = previewSamplingInputs(saved.copy(refractionBlur = 190), wholeWindow = false)
+        assertEquals(68, card.smallRefractionBlur)
+        assertEquals(137, card.bigRefractionBlur)
+        val disabled = previewSamplingInputs(saved.copy(enabled = false), wholeWindow = true)
+        assertEquals(40, disabled.backgroundBlur)
+        assertEquals(.075f, disabled.backgroundScale, 0f)
+        assertEquals(100, disabled.opacity)
+        assertNull(disabled.smallRefractionBlur)
     }
 
     @Test fun unifiedRecipesAndLockscreenScopeDoNotSilentlyEnableTuning() {

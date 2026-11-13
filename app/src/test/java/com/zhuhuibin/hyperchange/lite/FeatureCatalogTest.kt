@@ -3,11 +3,11 @@ package com.zhuhuibin.hyperchange.lite
 import com.zhuhuibin.hyperchange.lite.ui.Feature
 import com.zhuhuibin.hyperchange.lite.ui.MaterialCategory
 import com.zhuhuibin.hyperchange.lite.ui.settingDisabledReason
-import com.zhuhuibin.hyperchange.lite.ui.settingSectionTitle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class FeatureCatalogTest {
@@ -18,6 +18,18 @@ class FeatureCatalogTest {
         assertEquals(LiteCatalog.entries.size, destinations.size)
     }
 
+    @Test fun deferredGroupingKeysStayImportableWithoutAnyVisibleDestination() {
+        val deferred = DeferredSettings.hiddenKeys
+        assertTrue(LiteCatalog.entries.map { it.key }.containsAll(deferred))
+        val visible = Feature.entries.flatMap { it.visibleSettings }.map { it.key }
+        assertEquals(LiteCatalog.entries.map { it.key }.toSet() - deferred, visible.toSet())
+        assertEquals(visible.distinct().size, visible.size)
+        assertFalse(Feature.NOTIFICATIONS.visibleSettings.any { it.key in deferred })
+        assertFalse(Feature.NOTIFICATIONS.visibleSettings.any { it.group == "通知分组" })
+        assertFalse(Feature.SCOPES.visibleSettings.any { it.key == "glass_shade" })
+        assertTrue(Feature.SCOPES.visibleSettings.any { it.key == "glass_shade_enabled" })
+    }
+
     @Test(expected = IllegalStateException::class)
     fun newUnassignedSettingsCannotDisappearSilentlyFromTheApp() {
         Feature.owner(LiteSetting.toggle("unassigned_feature", "New setting", "New group"))
@@ -26,10 +38,19 @@ class FeatureCatalogTest {
     @Test fun materialParametersHaveOneEditorDestination() {
         val editorSettings = MaterialCategory.entries.flatMap { it.settings }
         val materialKeys = editorSettings.map { it.key }
-        assertEquals(Feature.MATERIAL.settings.map { it.key }.toSet(), materialKeys.toSet())
+        val destinations = listOf(Feature.SCOPES, Feature.MATERIAL, Feature.CORNERS).flatMap { it.settings }
+        assertEquals(destinations.map { it.key }.toSet(), materialKeys.toSet())
         assertEquals(materialKeys.distinct().size, materialKeys.size)
         assertTrue(MaterialCategory.entries.filter { it != MaterialCategory.PRESETS }.all { it.settings.isNotEmpty() })
-        assertTrue(LiteCatalog.entries.filter { it.key.startsWith("glass_") }.all { Feature.owner(it) == Feature.MATERIAL })
+        assertTrue(LiteCatalog.entries.filter { it.key.startsWith("glass_") }.all {
+            Feature.owner(it) == if (it.isToggle) Feature.SCOPES else Feature.MATERIAL
+        })
+        assertEquals(listOf("启用与范围", "材质", "圆角", "通知动画", "音量面板"), Feature.entries.map { it.title })
+        assertEquals(listOf(MaterialCategory.SCOPES), Feature.SCOPES.categories)
+        assertEquals(listOf(MaterialCategory.SURFACE, MaterialCategory.BACKGROUND, MaterialCategory.SHADE, MaterialCategory.PRESETS),
+            Feature.MATERIAL.categories)
+        assertEquals(listOf(MaterialCategory.NOTIFICATION, MaterialCategory.CONTROL, MaterialCategory.VOLUME), Feature.CORNERS.categories)
+        assertTrue(Feature.SCOPES.settings.all { it.isToggle })
     }
 
     @Test fun notificationAndVolumeBehaviorRemainOutsideTheMaterialEditor() {
@@ -46,7 +67,7 @@ class FeatureCatalogTest {
         }
     }
 
-    @Test fun sharedLockscreenScopeAndAllRadiusOverridesBelongToTheEditor() {
+    @Test fun lockscreenScopeAndRadiusOverridesHaveSeparateHomeDestinations() {
         val materialKeys = setOf(
             SettingsMigration.LOCKSCREEN_KEY, "notification_radius_enabled", "notification_radius",
             "cc_radius_enabled", "cc_device_radius", "cc_secondary_radius",
@@ -55,7 +76,8 @@ class FeatureCatalogTest {
         val materialSettings = LiteCatalog.entries.filter { it.key in materialKeys }
         assertEquals(materialKeys, materialSettings.map { it.key }.toSet())
         materialSettings.forEach { setting ->
-            assertEquals(Feature.MATERIAL, Feature.owner(setting))
+            assertEquals(if (setting.key == SettingsMigration.LOCKSCREEN_KEY) Feature.SCOPES else Feature.CORNERS,
+                Feature.owner(setting))
         }
         assertEquals(MaterialCategory.SCOPES, MaterialCategory.ownerOrNull(LiteCatalog.entries.first { it.key == SettingsMigration.LOCKSCREEN_KEY }))
     }
@@ -96,13 +118,33 @@ class FeatureCatalogTest {
             values + ("glass_enabled" to true)))
     }
 
-    @Test fun headsUpAdvancedControlsHaveExplicitSectionsInsteadOfArbitraryTruncation() {
-        fun section(key: String) = settingSectionTitle(LiteCatalog.entries.first { it.key == key })
-        assertEquals(section("notification_heads_up_pop_enabled"), section("notification_heads_up_pop_exit_scale"))
-        assertEquals(section("notification_heads_up_pop_exit_spring"), section("notification_heads_up_pop_exit_curve_y2"))
-        assertEquals(section("notification_heads_up_pop_spring"), section("notification_heads_up_pop_curve_x1"))
-        assertEquals(section("notification_heads_up_pop_blur"), section("notification_heads_up_pop_flip"))
-        assertTrue(section("notification_heads_up_pop_enabled") != section("notification_heads_up_pop_curve_x1"))
+    @Test fun bannerAndNotificationListNamesKeepAllAdvancedControlsInTheirOwnTabs() {
+        val banner = Feature.NOTIFICATIONS.visibleSettings.filter { it.key.startsWith("notification_heads_up_") }
+        val list = Feature.NOTIFICATIONS.visibleSettings.filter { it.key.startsWith("notification_stack_anim_") }
+        assertTrue(banner.isNotEmpty())
+        assertTrue(list.isNotEmpty())
+        assertEquals(setOf("顶部横幅动画"), banner.map { it.group }.toSet())
+        assertEquals(setOf("通知列表动画"), list.map { it.group }.toSet())
+        assertEquals("顶部横幅动画", banner.first { it.key == "notification_heads_up_pop_enabled" }.title)
+        assertEquals("通知列表动画", list.first { it.key == "notification_stack_anim_enabled" }.title)
+        assertTrue(banner.any { it.key == "notification_heads_up_pop_exit_curve_y2" })
+    }
+
+    @Test fun cardAndWholeBackgroundParametersNeverShareAnEditorCategory() {
+        val card = MaterialCategory.BACKGROUND.settings
+        val whole = MaterialCategory.SHADE.settings
+        assertEquals(3, card.size)
+        assertEquals(3, whole.size)
+        card.forEach { assertEquals(MaterialCategory.BACKGROUND, MaterialCategory.ownerOrNull(it)) }
+        whole.forEach { assertEquals(MaterialCategory.SHADE, MaterialCategory.ownerOrNull(it)) }
+        val enabled = mapOf("glass_enabled" to true, "glass_shade_enabled" to false)
+        card.forEach { assertNull(settingDisabledReason(it, enabled)) }
+        whole.forEach { assertNotNull(settingDisabledReason(it, enabled)) }
+        val onlyWhole = mapOf("glass_enabled" to false, "glass_shade_enabled" to true)
+        whole.forEach { assertNull(settingDisabledReason(it, onlyWhole)) }
+        card.forEach { assertNotNull(settingDisabledReason(it, onlyWhole)) }
+        assertEquals(MaterialCategory.SURFACE,
+            MaterialCategory.ownerOrNull(LiteCatalog.entries.first { it.key == "glass_background_brightness" }))
     }
 
 }

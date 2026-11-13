@@ -31,7 +31,13 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
   horizontally scrollable, single-tap project tab row under the pinned preview in
   every second-level editor. Preserve the application ID and migrate renamed
   preference keys for upgrades and old preset imports.
-  The owner confirmed the launcher icon works; retain its existing launcher/LSP entry.
+  Keep Home/Settings/About root navigation; scopes, materials and corners are separate
+  Home destinations. Import/export, theme and language belong in Settings. Editors
+  use compact peer cards without outside subgroup headings or persistent subtitles.
+  Control-center corner samples change only after actual edits, never from scroll
+  focus. Keep Chinese/English resources complete for both Compose and native previews.
+  The owner requested new unified launcher art for hc-lite and hmc-duo; preserve the
+  existing launcher/LSP entry and adaptive/round/monochrome resource contracts.
 - Global class-loading callbacks must keep their Java-only, callback-entry guard and
   defer adapter installation; see `design/STARTUP_SAFETY.md`. Preserve the upstream's
   critical startup ordering when pruning features instead of rewriting it casually.
@@ -79,3 +85,14 @@ Use Obsidian's local vault trash, never permanent deletion. The CLI delete comma
 currently selects system trash; for explicit local trash use the official CLI
 `eval` entry with `app.vault.trash(file, false)`. Verify source absence and retained
 file hashes; on interruption inspect the actual result before retrying.
+
+## Independent material layers
+
+Card glass/sampling and full-screen shade background have separate values,
+enable state and refresh requests. Card presets/undo or partial imports must not
+modify the full-screen layer. Preserve the strict real-expanded-panel gate from
+0.1.3; a heads-up-visible window never authorizes whole-screen tuning.
+Notification grouping/fold-history behavior is suspended at the owner's request.
+Keep its keys only for backup compatibility; do not expose controls, install hooks
+or resume compatibility work without a new request. Retired group code lives only
+in the ignored local archive, with the suspected MiDuo Noti interaction recorded.

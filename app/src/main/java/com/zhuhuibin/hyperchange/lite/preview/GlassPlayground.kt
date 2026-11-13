@@ -30,7 +30,10 @@ import com.zhuhuibin.hyperchange.lite.controls.VolumeInteractionEvent
 import com.zhuhuibin.hyperchange.lite.controls.VolumeInteractionModel
 import com.zhuhuibin.hyperchange.lite.controls.VolumeInteractionState
 import com.zhuhuibin.hyperchange.lite.controls.VolumePlacementModel
+import com.zhuhuibin.hyperchange.lite.controls.VolumePreviewLayout
 import com.zhuhuibin.hyperchange.lite.glass.readSoftGlassSettings
+import com.zhuhuibin.hyperchange.lite.ui.localizedText
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -38,7 +41,7 @@ import kotlin.math.roundToInt
 /** All preview gestures and animations remain within this Activity. */
 class GlassPlayground(context: Context, private val preferences: SharedPreferences) : FrameLayout(context) {
     enum class Scene(val title: String) {
-        NOTIFICATION("通知"), HEADS_UP("悬浮"), MEDIA("媒体"), CONTROL("控制中心"), VOLUME("音量"), WIDGET("负一屏"), SIDEBAR("侧栏"), SHADE("下拉背景")
+        NOTIFICATION("通知"), HEADS_UP("顶部横幅"), MEDIA("媒体"), CONTROL("控制中心"), VOLUME("音量"), WIDGET("负一屏"), SIDEBAR("侧栏"), SHADE("整体背景")
     }
     var scene: Scene = Scene.NOTIFICATION
         private set
@@ -58,6 +61,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private var materialComparison = false
     private var renderOnly = false
     private var focusedSetting = ""
+    private var ccSampleKey = ""
+    private var volumePreviewScale = 1f
+    private var volumePreviewInset = 0f
+    private var volumeArtwork: VolumeArtwork? = null
     private val focusedPreview = Runnable {
         if (isAttachedToWindow && !released) replayFocused()
     }
@@ -108,7 +115,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             val moving = volumeWidth.advance(dt) or volumePop.advance(dt) or volumeNudge.advance(dt) or
                 volumeDragX.advance(dt) or volumeDragY.advance(dt) or volumeDragScaleX.advance(dt) or volumeDragScaleY.advance(dt)
             surfaces.firstOrNull()?.let { card ->
-                val size = dp(volumeWidth.value).roundToInt().coerceAtLeast(1)
+                val size = (dp(volumeWidth.value) * volumePreviewScale).roundToInt().coerceAtLeast(1)
                 card.layoutParams?.let { params -> if (params.width != size) { params.width = size; card.layoutParams = params } }
                 val pop = VolumeMotionModel.popTransform(volumePop.value, number("volume_pop_scale", .2f),
                     dp(number("volume_pop_shift", 5.5f)), number("volume_pop_power", 3f))
@@ -118,6 +125,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 // physical-pixel gap as the runtime visible track.
                 card.translationX = volumeEdgeTranslation() + dp(volumeNudge.value) + pop.x + volumeDragX.value
                 card.translationY = pop.y + volumeDragY.value + number("volume_offset_y", 0f).toInt()
+                volumeArtwork?.iconOpacity = VolumeMotionModel.iconOpacity(volumeWidth.value, number("volume_thin_width", 9f), 52f)
             }
             if (moving || volumeReturnAt != 0L) postOnAnimation(this) else volumeScheduled = false
         }
@@ -141,6 +149,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         setOnClickListener { if (removed) replay() }
         content.setOnTouchListener { _, event ->
             if (scene != Scene.VOLUME || !behavior.volume) false else {
+                if (event.actionMasked == MotionEvent.ACTION_DOWN && !volumeHit(event.x, event.y)) return@setOnTouchListener false
+                if (event.actionMasked != MotionEvent.ACTION_DOWN && !volumeTouching) return@setOnTouchListener false
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         parent?.requestDisallowInterceptTouchEvent(true)
@@ -197,7 +207,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         if (renderOnly) return
         when {
             group.contains("下拉") -> setScene(Scene.SHADE)
-            group.contains("悬浮") -> setScene(Scene.HEADS_UP)
+            group.contains("顶部横幅") || group.contains("悬浮") -> setScene(Scene.HEADS_UP)
             group.contains("通知") -> setScene(Scene.NOTIFICATION)
             group.contains("音量") -> setScene(Scene.VOLUME)
             group.contains("侧栏") || group.contains("侧边") -> setScene(Scene.SIDEBAR)
@@ -246,8 +256,16 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         focusedSetting = key
         expanded = false
         val oldSample = sampleVariant(old)
-        if (sampleVariant(key) != oldSample && (scene == Scene.CONTROL || scene == Scene.VOLUME)) buildScene()
+        if (sampleVariant(key) != oldSample && scene == Scene.VOLUME) buildScene()
         else { cancelAnimations(); layoutScene() }
+    }
+
+    /** Only an actual edit selects one CC geometry sample; scrolling never calls this. */
+    fun focusSetting(key: String) {
+        val next = key.takeIf { it in setOf("cc_card_radius", "cc_tile_radius", "cc_media_radius", "cc_slider_radius", "cc_device_radius", "cc_secondary_radius") }.orEmpty()
+        if (next == ccSampleKey) return
+        ccSampleKey = next
+        if (scene == Scene.CONTROL) buildScene()
     }
 
     /** Coalesce slider writes; play once with the newly persisted configuration. */
@@ -327,7 +345,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 val image = result.getOrNull()
                 if (!released && generation == imageGeneration) {
                     if (image != null) { wallpaper.setImage(image); refresh() }
-                    else Toast.makeText(context, result.exceptionOrNull()?.message ?: "无法读取图片", Toast.LENGTH_SHORT).show()
+                    else Toast.makeText(context, sampleText(result.exceptionOrNull()?.message ?: "无法读取图片"), Toast.LENGTH_SHORT).show()
                 } else image?.recycle()
             }
         }.start()
@@ -355,7 +373,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         mainCard?.visibility = View.VISIBLE
         when (scene) {
             Scene.HEADS_UP -> playHeadsUp(false)
-            Scene.NOTIFICATION -> if (focusGroup.contains("显隐")) playStack(false) else {
+            Scene.NOTIFICATION -> if (listAnimationFocus()) playStack(false) else {
                 expanded = !expanded
                 layoutScene(animated = true)
             }
@@ -380,13 +398,14 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         content.removeAllViews()
         surfaces.clear()
         mainCard = null
+        volumeArtwork = null
         when (scene) {
             Scene.NOTIFICATION -> {
-                repeat(2) { index -> addCard("稍后提醒", "还有 ${2 - index} 条通知", "●", false) }
+                repeat(2) { index -> addCard("稍后提醒", sampleText("还有 %d 条通知", 2 - index), "●", false) }
                 mainCard = addCard("今天的安排", "留一点时间，看看窗外。", "◉", true)
                 mainCard?.setOnClickListener {
                     if (renderOnly && focusedSetting.isNotEmpty() && previewActionFor(focusedSetting) != PreviewAction.GROUP) replayFocused()
-                    else if (focusGroup.contains("显隐")) playStack(!removed)
+                    else if (listAnimationFocus()) playStack(!removed)
                     else { expanded = !expanded; layoutScene(animated = true) }
                 }
             }
@@ -401,37 +420,32 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 mainCard?.setOnClickListener { replay() }
             }
             Scene.CONTROL -> {
-                val key = when (sampleVariant(focusedSetting)) {
-                    "cc_tile" -> "cc_tile_radius"
-                    "cc_slider" -> "cc_slider_radius"
-                    "cc_media" -> "cc_media_radius"
-                    "cc_device" -> "cc_device_radius"
-                    "cc_secondary" -> "cc_secondary_radius"
-                    else -> "cc_card_radius"
+                val keys = if (ccSampleKey.isEmpty()) listOf("cc_card_radius", "cc_tile_radius", "cc_slider_radius", "cc_media_radius", "cc_device_radius", "cc_secondary_radius") else listOf(ccSampleKey)
+                keys.forEach { key ->
+                    val sample = when (key) {
+                        "cc_tile_radius" -> Triple("蓝牙", "已开启", "ᛒ")
+                        "cc_slider_radius" -> Triple("屏幕亮度", "━━━━━━━ ──", "☀")
+                        "cc_media_radius" -> Triple("正在播放", "沿岸漫步   Ⅱ", "♫")
+                        "cc_device_radius" -> Triple("设备中心", "附近的设备", "▣")
+                        "cc_secondary_radius" -> Triple("更多控制", "无线网络", "⋮")
+                        else -> Triple("无线网络", "已连接", "⌁")
+                    }
+                    addCard(sample.first, sample.second, sample.third, false).radiusKey = key
                 }
-                val sample = when (key) {
-                    "cc_tile_radius" -> Triple("蓝牙", "已开启", "ᛒ")
-                    "cc_slider_radius" -> Triple("屏幕亮度", "━━━━━━━ ──", "☀")
-                    "cc_media_radius" -> Triple("正在播放", "沿岸漫步   Ⅱ", "♫")
-                    "cc_device_radius" -> Triple("设备中心", "附近的设备", "▣")
-                    "cc_secondary_radius" -> Triple("更多控制", "无线网络", "⋮")
-                    else -> Triple("无线网络", "已连接", "⌁")
-                }
-                addCard(sample.first, sample.second, sample.third, false).radiusKey = key
             }
             Scene.VOLUME -> {
                 addCard("", "", "♪", false).radiusKey = "volume_corner"
                 addCard("静音定时", "30 分钟", "◷", false).radiusKey = "volume_timer_corner"
-                val ringer = SampleSurface(context).apply {
-                    radiusKey = "volume_corner"
-                    contentDescription = "静音与勿扰"
-                    addView(TextView(context).apply {
-                        text = "♪\n☾"; textSize = 21f; gravity = Gravity.CENTER
-                        setTextColor(if (night) Color.WHITE else Color.rgb(30, 41, 49))
-                    }, LayoutParams(-1, -1))
+                for (kind in listOf(1, 2)) {
+                    val button = SampleSurface(context).apply {
+                        radiusKey = ""
+                        pill = true
+                        contentDescription = sampleText(if (kind == 1) "静音按钮" else "勿扰按钮")
+                        addView(VolumeArtwork(context, kind), LayoutParams(-1, -1))
+                    }
+                    surfaces += button
+                    content.addView(button, LayoutParams(dp(52), dp(34)))
                 }
-                surfaces += ringer
-                content.addView(ringer, LayoutParams(dp(44), dp(84)))
             }
             Scene.WIDGET -> {
                 addCard("晴朗", "26°\n适合出门走走", "☀", false)
@@ -448,6 +462,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
 
     private fun addCard(title: String, detail: String, icon: String, interactive: Boolean): SampleSurface {
+        val displayTitle = sampleText(title)
+        val displayDetail = sampleText(detail)
         val card = SampleSurface(context)
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -464,9 +480,9 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         }
         row.addView(badge, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(12) })
         val words = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        words.addView(TextView(context).apply { text = title; textSize = 13f; setTextColor(foreground); setTypeface(typeface, Typeface.BOLD); maxLines = 1 })
+        words.addView(TextView(context).apply { text = displayTitle; textSize = 13f; setTextColor(foreground); setTypeface(typeface, Typeface.BOLD); maxLines = 1 })
         val detailText = TextView(context).apply {
-            text = detail; textSize = 11f; setTextColor(foreground); alpha = .75f
+            text = displayDetail; textSize = 11f; setTextColor(foreground); alpha = .75f
             setPadding(0, dp(5), 0, 0); maxLines = 5
         }
         words.addView(detailText)
@@ -475,15 +491,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         card.labelRow = row
         row.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
         if (scene == Scene.VOLUME && title.isEmpty()) {
-            card.addView(object : View(context) {
-                private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-                override fun onDraw(canvas: Canvas) {
-                    paint.color = if (night) 0xafffffff.toInt() else 0xbfffffff.toInt()
-                    canvas.drawRect(0f, height * .32f, width.toFloat(), height.toFloat(), paint)
-                }
-            }, LayoutParams(-1, -1))
+            volumeArtwork = VolumeArtwork(context, 0)
+            card.addView(volumeArtwork, LayoutParams(-1, -1))
         } else card.addView(row, LayoutParams(-1, -1))
-        card.contentDescription = "$title。$detail。仅本地预览。"
+        card.contentDescription = sampleText("%s。%s。仅本地预览。", displayTitle, displayDetail)
         card.cameraDistance = dp(1400).toFloat()
         if (interactive) {
             card.isClickable = true
@@ -575,6 +586,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 if (sampleVariant(focusedSetting) == "volume_timer") {
                     surfaces.getOrNull(0)?.visibility = View.GONE
                     surfaces.getOrNull(2)?.visibility = View.GONE
+                    surfaces.getOrNull(3)?.visibility = View.GONE
                     surfaces.getOrNull(1)?.let {
                         it.visibility = View.VISIBLE
                         val height = dp(68).coerceAtMost(availableHeight)
@@ -587,27 +599,32 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 surfaces.getOrNull(1)?.visibility = View.GONE
                 val hideRinger = VolumePanelAppearance.hideRinger(false, false, behavior.volume && volumeState.narrow,
                     preferences.getBoolean("volume_hide_ringer", false))
-                val barWidth = dp(if (behavior.volume) volumeWidth.value else 52f).roundToInt().coerceIn(dp(4), dp(84))
-                val barHeight = dp(if (behavior.volume) number("volume_height", 150f) else 150f).roundToInt().coerceAtLeast(dp(24)).coerceAtMost(availableHeight)
+                val layout = VolumePreviewLayout.fit(w.toFloat(), availableHeight.toFloat(), resources.displayMetrics.density,
+                    if (behavior.volume) volumeWidth.value else 52f, if (behavior.volume) number("volume_height", 150f) else 150f)
+                volumePreviewScale = layout.scale
+                volumePreviewInset = w - layout.barLeft - layout.barWidth
+                val barWidth = layout.barWidth.roundToInt().coerceAtLeast(1)
+                val barHeight = layout.barHeight.roundToInt().coerceAtLeast(1)
                 surfaces.getOrNull(0)?.let {
-                    place(it, w - barWidth, (h - barHeight) / 2, barWidth, barHeight)
+                    place(it, layout.barLeft.roundToInt(), inset + layout.barTop.roundToInt(), barWidth, barHeight)
                     // Keep the visual right edge fixed while its width spring runs.
                     // The native wide session stays at its ordinary inset; narrowing
                     // moves its visible edge to the configured screen gap.
                     (it.layoutParams as LayoutParams).apply {
                         gravity = Gravity.TOP or Gravity.RIGHT
                         leftMargin = 0
-                        rightMargin = dp(24)
+                        rightMargin = volumePreviewInset.roundToInt()
                     }
                     it.requestLayout()
                     it.translationX = if (behavior.volume) volumeEdgeTranslation() else 0f
                     it.translationY = if (behavior.volume) number("volume_offset_y", 0f).toInt().toFloat() else 0f
+                    volumeArtwork?.iconOpacity = if (behavior.volume) VolumeMotionModel.iconOpacity(volumeWidth.value, number("volume_thin_width", 9f), 52f) else 1f
                 }
-                surfaces.getOrNull(2)?.let {
-                    it.visibility = if (hideRinger) View.GONE else View.VISIBLE
-                    if (!hideRinger) {
-                        val controlHeight = dp(84).coerceAtMost(availableHeight)
-                        place(it, (w - dp(24) - barWidth - dp(56)).coerceAtLeast(0), (h - controlHeight) / 2, dp(44), controlHeight)
+                for ((index, top) in listOf(2 to layout.muteTop, 3 to layout.dndTop)) {
+                    surfaces.getOrNull(index)?.let {
+                        it.visibility = if (hideRinger) View.GONE else View.VISIBLE
+                        if (!hideRinger) place(it, layout.buttonLeft.roundToInt(), inset + top.roundToInt(),
+                            layout.buttonWidth.roundToInt(), layout.buttonHeight.roundToInt())
                     }
                 }
             }
@@ -803,8 +820,18 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private fun volumeEdgeGap(): Float = volumeEdgeGapPx
 
     private fun volumeEdgeTranslation(): Float = VolumePlacementModel.edgeTranslation(
-        content.width.toFloat(), content.width - dp(24).toFloat(), volumeEdgeGap()) *
+        content.width.toFloat(), content.width - volumePreviewInset, volumeEdgeGap()) *
         VolumePlacementModel.narrowFraction(volumeWidth.value, number("volume_thin_width", 9f), 52f)
+
+    private fun volumeHit(x: Float, y: Float): Boolean {
+        val bar = surfaces.firstOrNull()?.takeIf { it.visibility == View.VISIBLE } ?: return false
+        val bounds = RectF(0f, 0f, bar.width.toFloat(), bar.height.toFloat())
+        bar.matrix.mapRect(bounds)
+        bounds.offset(bar.left.toFloat(), bar.top.toFloat())
+        return bounds.contains(x, y)
+    }
+
+    private fun listAnimationFocus(): Boolean = focusGroup.contains("显隐") || focusGroup.contains("列表动画")
 
     private fun scheduleVolume() {
         if (!volumeScheduled) {
@@ -866,11 +893,11 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             onMaterialStatusChanged?.invoke(native)
         }
         if (renderOnly) {
-            contentDescription = "${scene.title}，" + when {
+            contentDescription = "${sampleText(scene.title)} · " + sampleText(when {
                 !ready -> "正在准备预览"
                 native -> "App 内样例，原生材质接口已配置"
                 else -> "示意预览，系统材质以实际面板为准"
-            }
+            })
             val state = currentMaterialState()
             wallpaper.setSamplingFallback(scene == Scene.SHADE && ready && !native,
                 if (state.settings.enabled) state.settings.backgroundBlur else 100,
@@ -883,10 +910,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             else -> "示意预览，非原生材质"
         }
         val action = when (scene) {
-            Scene.NOTIFICATION -> if (focusGroup.contains("显隐")) {
+            Scene.NOTIFICATION -> if (listAnimationFocus()) {
                 if (behavior.stack) "轻点查看出现与消失" else "通知出现与消失动画已关闭"
             } else if (behavior.rowTilt) "轻点展开 · 按住查看倾斜" else "轻点展开；按压效果已关闭"
-            Scene.HEADS_UP -> if (behavior.headsUp) "轻点重播弹出" else "悬浮动画已关闭"
+            Scene.HEADS_UP -> if (behavior.headsUp) "轻点重播顶部横幅" else "顶部横幅动画已关闭"
             Scene.MEDIA -> if (behavior.mediaTilt) "按住查看倾斜" else "音乐按压效果已关闭"
             Scene.VOLUME -> if (behavior.volume) "首次宽条 · 连按收窄 · 按住变宽" else "窄音量条已关闭，显示普通宽度"
             else -> "实时调参"
@@ -897,9 +924,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             native -> "原生接口已调用"
             else -> "示意预览"
         }
+        val sampleLabel = sampleText(if (scene == Scene.SHADE) "整屏背景样例" else "通知配方样例")
         val label = if (materialComparison)
-            "${scene.title} · $shortMaterialLabel · 通知配方样例\n${state.scopeStatus}\n${state.scopeNote}"
-        else "$materialLabel · 本地交互示意\n$action，不启用系统功能"
+            "${sampleText(scene.title)} · ${sampleText(shortMaterialLabel)} · $sampleLabel\n${sampleText(state.scopeStatus)}\n${sampleText(state.scopeNote)}"
+        else "${sampleText(materialLabel)} · ${sampleText("本地交互示意")}\n${sampleText("%s，不启用系统功能", sampleText(action))}"
         if (caption.text.toString() != label) caption.text = label
         // Only the shade fallback approximates background sampling. Never label
         // this RenderEffect as the unavailable OEM glass/refraction renderer.
@@ -918,12 +946,74 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private fun number(key: String, default: Float) = (preferences.all[key] as? Number)?.toFloat() ?: default
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
     private fun dp(value: Float) = value * resources.displayMetrics.density
+    private fun sampleText(source: String, vararg arguments: Any): String {
+        val template = localizedText(context, source)
+        return if (arguments.isEmpty()) template else String.format(
+            resources.configuration.locales[0] ?: Locale.getDefault(), template, *arguments,
+        )
+    }
     private fun currentMaterialState() = previewMaterialState(
         scene.name, preferences.all, readSoftGlassSettings(preferences), materialComparison,
     )
 
+    /** Original local vector content: a speaker, muted bell and crescent. */
+    private class VolumeArtwork(context: Context, private val kind: Int) : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val shape = Path()
+        private val cutout = Path()
+        var iconOpacity = 1f
+            set(value) { field = value; invalidate() }
+
+        override fun onDraw(canvas: Canvas) {
+            if (kind == 0) {
+                paint.style = Paint.Style.FILL
+                paint.color = 0xe8ffffff.toInt()
+                canvas.drawRect(0f, height * .58f, width.toFloat(), height.toFloat(), paint)
+            }
+            val size = if (kind == 0) minOf(width * .56f, height * .16f) else minOf(width * .52f, height * .7f)
+            if (size <= 0f) return
+            val save = canvas.save()
+            canvas.translate((width - size) / 2f, if (kind == 0) height * .84f - size / 2f else (height - size) / 2f)
+            canvas.scale(size / 24f, size / 24f)
+            paint.color = when (kind) { 0 -> Color.rgb(31, 132, 247); 1 -> Color.rgb(249, 99, 102); else -> Color.WHITE }
+            paint.alpha = if (kind == 0) (255 * iconOpacity.coerceIn(0f, 1f)).roundToInt() else 255
+            paint.strokeWidth = 2f
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.strokeJoin = Paint.Join.ROUND
+            shape.reset()
+            when (kind) {
+                0 -> {
+                    paint.style = Paint.Style.FILL
+                    shape.moveTo(2f, 8f); shape.lineTo(7f, 8f); shape.lineTo(13f, 3f)
+                    shape.lineTo(13f, 21f); shape.lineTo(7f, 16f); shape.lineTo(2f, 16f); shape.close()
+                    canvas.drawPath(shape, paint)
+                    paint.style = Paint.Style.STROKE
+                    canvas.drawArc(10f, 5f, 21f, 19f, -65f, 130f, false, paint)
+                    canvas.drawArc(8f, 1f, 27f, 23f, -58f, 116f, false, paint)
+                }
+                1 -> {
+                    paint.style = Paint.Style.STROKE
+                    shape.moveTo(5f, 17f); shape.lineTo(7f, 13f); shape.lineTo(7f, 9f)
+                    shape.cubicTo(7f, 2f, 17f, 2f, 17f, 9f); shape.lineTo(17f, 13f); shape.lineTo(19f, 17f); shape.close()
+                    canvas.drawPath(shape, paint)
+                    canvas.drawArc(9f, 17f, 15f, 23f, 25f, 130f, false, paint)
+                    canvas.drawLine(3f, 2f, 21f, 22f, paint)
+                }
+                else -> {
+                    paint.style = Paint.Style.FILL
+                    shape.addCircle(12f, 12f, 10f, Path.Direction.CW)
+                    cutout.reset(); cutout.addCircle(17f, 7f, 10f, Path.Direction.CW)
+                    shape.op(cutout, Path.Op.DIFFERENCE)
+                    canvas.drawPath(shape, paint)
+                }
+            }
+            canvas.restoreToCount(save)
+        }
+    }
+
     private inner class SampleSurface(context: Context) : FrameLayout(context) {
         var nativeApplied = false
+        var pill = false
         var radiusKey = if (scene == Scene.NOTIFICATION || scene == Scene.HEADS_UP || scene == Scene.MEDIA) "notification_radius" else ""
         var detailText: TextView? = null
         var badgeView: TextView? = null
@@ -957,10 +1047,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 "cc_tile_radius" -> 24f
                 else -> 26f
             }
-            radius = dp(previewRadius(radiusKey, number(radiusKey, baseline), baseline, preferences.all, materialComparison))
+            radius = if (pill && height > 0) height / 2f else dp(previewRadius(radiusKey, number(radiusKey, baseline), baseline, preferences.all, materialComparison))
             invalidateOutline()
             val state = currentMaterialState()
-            nativeApplied = material.apply(this, state.settings)
+            nativeApplied = material.apply(this, state.settings, scene.name)
             val opacity = if (state.settings.enabled) state.settings.backgroundOpacity / 100f else 1f
             // Native glass owns tint/opacity through its OEM blend colors. A second
             // painted veil would make the editor look cloudier than its system recipe.

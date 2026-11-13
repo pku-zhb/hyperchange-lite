@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- Transparent control cutouts preserve the HyperChanger-derived motif in themed icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M45,26H63Q71,26 71,34V74Q71,82 63,82H45Q37,82 37,74V34Q37,26 45,26ZM51,32H57Q58,32 58,33Q58,34 57,34H51Q50,34 50,33Q50,32 51,32ZM51,74H57Q58,74 58,75Q58,76 57,76H51Q50,76 50,75Q50,74 51,74ZM44,43.75H46.73A3.5,3.5 0,0 1,53.27,43.75H64V46.25H53.27A3.5,3.5 0,0 1,46.73,46.25H44ZM44,59.75H55.73A3.5,3.5 0,0 1,62.27,59.75H64V62.25H62.27A3.5,3.5 0,0 1,55.73,62.25H44ZM30,37Q33,37 33,40V68Q33,71 30,71Q27,71 27,68V40Q27,37 30,37ZM78,37Q81,37 81,40V68Q81,71 78,71Q75,71 75,68V40Q75,37 78,37Z" />
+</vector>

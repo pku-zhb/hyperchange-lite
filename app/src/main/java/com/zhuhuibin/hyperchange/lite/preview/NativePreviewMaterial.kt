@@ -7,6 +7,7 @@ import android.graphics.Point
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.SettingsMigration
 import com.zhuhuibin.hyperchange.lite.glass.SoftGlassSettings
+import com.zhuhuibin.hyperchange.lite.glass.shadeGlassSettings
 import com.zhuhuibin.hyperchange.lite.glass.softGlassBlur
 import com.zhuhuibin.hyperchange.lite.glass.softGlassColorAlpha
 import com.zhuhuibin.hyperchange.lite.glass.softGlassScale
@@ -26,13 +27,18 @@ internal fun previewMaterialState(
     saved: SoftGlassSettings,
     respectScopes: Boolean,
 ): PreviewMaterialState {
+    if (scene == "SHADE") {
+        val shade = shadeGlassSettings(values)
+        return PreviewMaterialState(shade,
+            if (shade.enabled) "整屏背景调节已开启" else "整屏背景调节已关闭，参数保留",
+            "仅预览整层背景取样与底色；不使用卡片折射和光学配方，系统仍需实际展开面板")
+    }
     fun enabled(key: String, fallback: Boolean = false) = values[key] as? Boolean ?: fallback
     val range = when (scene) {
         "NOTIFICATION", "HEADS_UP" -> enabled("glass_notifications", true)
         "MEDIA" -> SettingsMigration.resolve(values)[SettingsMigration.MEDIA_KEY] == true
         "CONTROL" -> enabled("glass_control_center", true)
         "VOLUME" -> enabled("glass_volume", true)
-        "SHADE" -> enabled("glass_shade", true)
         else -> true
     }
     val independent = scene == "WIDGET" || scene == "SIDEBAR"
@@ -64,6 +70,21 @@ internal fun previewMaterialState(
     return PreviewMaterialState(settings, status, note)
 }
 
+internal data class PreviewSamplingInputs(
+    val backgroundBlur: Int, val backgroundScale: Float, val opacity: Int,
+    val smallRefractionBlur: Int?, val bigRefractionBlur: Int?,
+)
+
+/** Whole-window sampling never acquires the card's independent refraction channel. */
+internal fun previewSamplingInputs(settings: SoftGlassSettings, wholeWindow: Boolean): PreviewSamplingInputs =
+    PreviewSamplingInputs(
+        softGlassBlur(40, if (settings.enabled) settings.backgroundBlur else 100),
+        softGlassScale(.075f, if (settings.enabled) settings.backgroundScale else 100),
+        if (settings.enabled) settings.backgroundOpacity else 100,
+        if (wholeWindow) null else softGlassBlur(36, if (settings.enabled) settings.refractionBlur else 100),
+        if (wholeWindow) null else softGlassBlur(72, if (settings.enabled) settings.refractionBlur else 100),
+    )
+
 /** Disabled geometry controls retain a stable local baseline instead of leaking saved overrides. */
 internal fun previewRadius(
     key: String,
@@ -86,18 +107,21 @@ internal fun previewRadius(
 internal class NativePreviewMaterial(private val context: Context) {
     private data class Recipe(val glass: FloatArray, val blends: List<Point>)
     private var recipe: Recipe? = null
+    private var backdropBlends: List<Point>? = null
     private var night = false
     private var resolved = false
     private val methods = HashMap<String, Method?>()
 
     fun setNight(value: Boolean) {
-        if (night != value) { night = value; resolved = false; recipe = null }
+        if (night != value) { night = value; resolved = false; recipe = null; backdropBlends = null }
     }
 
-    fun apply(view: View, glass: SoftGlassSettings): Boolean {
+    fun apply(view: View, glass: SoftGlassSettings, scene: String = "NOTIFICATION"): Boolean {
         if (!resolved) resolveRecipe()
-        val original = recipe ?: return false
         if (view.width <= 0 || view.height <= 0 || !view.isHardwareAccelerated) return false
+        if (scene == "SHADE") return applyBackdrop(view, glass)
+        val original = recipe ?: run { clear(view); return false }
+        val inputs = previewSamplingInputs(glass, wholeWindow = false)
         return runCatching {
             // The test chart is inside this Activity. Use the OEM local-content
             // path, as HyperChanger's applyLocalBlur does, rather than sampling
@@ -105,21 +129,42 @@ internal class NativePreviewMaterial(private val context: Context) {
             // be reported as a successfully configured native sample.
             invoke(view, "setMiBackgroundBlurMode", 1)
             invoke(view, "setMiBackgroundBlurType", 1)
-            invoke(view, "setMiBackgroundBlurRadius", softGlassBlur(40, if (glass.enabled) glass.backgroundBlur else 100))
+            invoke(view, "setMiBackgroundBlurRadius", inputs.backgroundBlur)
             invoke(view, "setPassWindowBlurEnabled", false)
             invoke(view, "setMiViewBlurMode", 1)
             invoke(view, "setMiViewMaterialType", 1)
-            invoke(view, "setMiBackgroundBlurScaleRatio", softGlassScale(.075f, if (glass.enabled) glass.backgroundScale else 100))
+            invoke(view, "setMiBackgroundBlurScaleRatio", inputs.backgroundScale)
             optional(view, "setMiGlassSdfMaxSize", view.width.toFloat(), view.height.toFloat())
-            val refraction = if (glass.enabled) glass.refractionBlur else 100
-            invoke(view, "setMiGlassBlurRadius", softGlassBlur(36, refraction), softGlassBlur(72, refraction))
+            invoke(view, "setMiGlassBlurRadius", requireNotNull(inputs.smallRefractionBlur), requireNotNull(inputs.bigRefractionBlur))
             invoke(view, "setMiGlass", tuneSoftGlass(original.glass.copyOf(), glass))
             // The local view has no OEM NotificationRowBlurEffect to seed its blend
             // texture. Supply that effect's normal shade colors once through the
             // batch setter; do not add a second Drawable tint above native glass.
-            val opacity = if (glass.enabled) glass.backgroundOpacity else 100
             invoke(view, "setMiBackgroundBlendColors", ArrayList(original.blends.map {
-                Point(softGlassColorAlpha(it.x, opacity), it.y)
+                Point(softGlassColorAlpha(it.x, inputs.opacity), it.y)
+            }))
+            view.invalidate()
+            true
+        }.getOrElse { clear(view); false }
+    }
+
+    private fun applyBackdrop(view: View, settings: SoftGlassSettings): Boolean {
+        val colors = backdropBlends ?: run { clear(view); return false }
+        val inputs = previewSamplingInputs(settings, wholeWindow = true)
+        return runCatching {
+            // This is an App-local backdrop sampler, not a glass card or a
+            // cross-window blur over another App. The OEM shade colors supply tint.
+            optional(view, "setMiGlass", floatArrayOf())
+            optional(view, "setMiGlassBlurRadius", 0, 0)
+            invoke(view, "setMiViewMaterialType", 0)
+            invoke(view, "setMiBackgroundBlurMode", 1)
+            invoke(view, "setMiBackgroundBlurType", 1)
+            invoke(view, "setPassWindowBlurEnabled", false)
+            invoke(view, "setMiViewBlurMode", 1)
+            invoke(view, "setMiBackgroundBlurRadius", inputs.backgroundBlur)
+            invoke(view, "setMiBackgroundBlurScaleRatio", inputs.backgroundScale)
+            invoke(view, "setMiBackgroundBlendColors", ArrayList(colors.map {
+                Point(softGlassColorAlpha(it.x, inputs.opacity), it.y)
             }))
             view.invalidate()
             true
@@ -138,13 +183,15 @@ internal class NativePreviewMaterial(private val context: Context) {
 
     private fun resolveRecipe() {
         resolved = true
-        recipe = runCatching {
+        val resources = runCatching {
             val app = context.createPackageContext("com.android.systemui", 0)
             val config = Configuration(app.resources.configuration).apply {
                 uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
                     if (night) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
             }
-            val resources = app.createConfigurationContext(config).resources
+            app.createConfigurationContext(config).resources
+        }.getOrNull() ?: return
+        recipe = runCatching {
             val id = resources.getIdentifier("notification_glass_params_normal", "array", "com.android.systemui")
             if (id == 0) return@runCatching null
             val glass = resources.getStringArray(id).map { it.toFloatOrNull() ?: return@runCatching null }.toFloatArray()
@@ -157,6 +204,13 @@ internal class NativePreviewMaterial(private val context: Context) {
                 Point(resources.getColor(color, null), resources.getInteger(mode))
             }
             Recipe(glass, blends)
+        }.getOrNull()
+        backdropBlends = runCatching {
+            val id = resources.getIdentifier("shade_blend_colors_bionics", "array", "com.android.systemui")
+            check(id != 0) { "Whole-window shade colors are unavailable" }
+            val colors = resources.getIntArray(id)
+            check(colors.isNotEmpty() && colors.size % 2 == 0) { "Invalid whole-window shade colors" }
+            colors.toList().chunked(2).map { Point(it[0], it[1]) }
         }.getOrNull()
     }
 

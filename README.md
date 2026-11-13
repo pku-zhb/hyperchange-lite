@@ -4,6 +4,16 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.4 separates card materials from the whole notification/Control Center
+backdrop, including independent values, enable flags, migration and refresh.
+The App now has Home, Settings and About pages, compact peer controls, separate
+material/corner destinations, and native system/light/dark and Chinese/English
+preferences. Notification grouping is suspended. Ordinary hardware-volume
+updates now enter the narrow phase, with an accurate two-button preview.
+Both maintained Apps share a restrained vector icon family.
+See [independent layers](design/MATERIAL_LAYERS.md) and the
+[current host checks](design/VALIDATION.md); phone rendering remains acceptance.
+
 Version 0.1.3 isolates whole-background tuning from heads-up banners and retires
 closed-panel background snapshots. It requires a real expanded panel in a
 confirmed unlocked/non-AOD scene; unknown/locked scenes retain native backgrounds.

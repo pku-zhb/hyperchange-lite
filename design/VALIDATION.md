@@ -1,5 +1,31 @@
 # Host validation
 
+## 0.1.4 independent layers and settings usability
+
+- All 210 JVM tests in 36 suites pass with no failures, errors or skips.
+  `:app:lintDebug` passes; existing non-blocking platform/compatibility warnings
+  remain. `git diff --check` passes.
+- Migration checks cover fresh/local/remote state, complete legacy exports,
+  card-only presets, whole-only partial imports with/without migration metadata,
+  reset and backup round trips. Card recipes/undo do not alter backdrop values
+  or its independent enable flag. Refresh masks keep native setter channels apart.
+- Native preview routing uses the independently enabled shade settings, including
+  OEM blend-color initialization. Unsupported OEM calls retain the schematic
+  fallback; successful setup is not proof of GPU appearance or loaded hooks.
+- Volume tests cover first-show wide state, real level changes versus redundant
+  frames, touch/release, delayed attachment, native width changes and the separate
+  mute/moon footer geometry. Exact OEM event declarations were checked in the
+  existing SystemUI artifact; the old endpoint-only key animation was insufficient.
+- UI checks cover complete resource labels and format signatures, App appearance
+  backup validation, deferred-setting exclusion, actual-edit-only Control Center
+  preview selection and stable preview identity across scroll changes.
+- Notification grouping/fold-history hooks and group source are retired from the
+  active tree, with the suspected Noti conflict recorded rather than repaired.
+- No phone GUI, screenshots, installation, settings writes, scope reload or reboot
+  was performed. Owner acceptance is limited to the changed material channels,
+  editor behavior/language, real volume phases and launcher appearance.
+  Final signed/optimized package checks are recorded by the archive workflow.
+
 ## 0.1.3 heads-up and whole-background isolation
 
 - The owner reproduced the unwanted foreground-App blur/dim, then confirmed that

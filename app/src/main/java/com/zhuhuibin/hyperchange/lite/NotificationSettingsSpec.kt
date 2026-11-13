@@ -16,8 +16,8 @@ object NotificationSettingsSpec {
         number("notification_press_tilt_max_deg", "最大倾斜角度", tilt, 4f, 2f, 20f, .1f)
         number("notification_press_tilt_scale", "按下大小", tilt, .96f, .85f, 1f, .01f)
 
-        val heads = "悬浮通知"
-        toggle("notification_heads_up_pop_enabled", "悬浮弹出动画", heads, summary = "保留原生悬浮位置，调整缩放、翻转与表面模糊。")
+        val heads = "顶部横幅动画"
+        toggle("notification_heads_up_pop_enabled", "顶部横幅动画", heads, summary = "保留原生悬浮位置，调整缩放、翻转与表面模糊。")
         number("notification_heads_up_pop_scale", "进入起始缩放", heads, .6f, .5f, 1f, .01f)
         number("notification_heads_up_pop_duration", "进入时长（毫秒）", heads, 500f, 200f, 1500f, 10f)
         number("notification_heads_up_pop_delay", "进入延迟（毫秒）", heads, 150f, 0f, 600f, 10f)
@@ -45,8 +45,8 @@ object NotificationSettingsSpec {
             number("${prefix}_curve_y2", "$label 曲线 Y2", heads, 1f, -.5f, 2f, .01f)
         }
 
-        val rows = "通知显隐"
-        toggle("notification_stack_anim_enabled", "显示与消失动画", rows, summary = "不替换横滑删除和悬浮通知动画。")
+        val rows = "通知列表动画"
+        toggle("notification_stack_anim_enabled", "通知列表动画", rows, summary = "不替换横滑删除和悬浮通知动画。")
         for ((phase, title, duration, blur) in listOf(listOf("add", "显示", "700", "50"), listOf("remove", "消失", "500", "20"))) {
             number("notification_stack_anim_${phase}_scale", "$title 缩放", rows, .5f, .4f, 1f, .01f)
             number("notification_stack_anim_${phase}_alpha", "$title 透明度", rows, 0f, 0f, 1f, .01f)
