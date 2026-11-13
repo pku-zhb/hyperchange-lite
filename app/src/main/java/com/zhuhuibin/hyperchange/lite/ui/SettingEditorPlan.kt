@@ -34,7 +34,7 @@ internal fun editorItems(category: MaterialCategory?, specs: List<LiteSetting>):
             group("card-scopes", "卡片材质生效范围", listOf("glass_enabled", "glass_notifications", "glass_heads_up", "glass_control_center", "glass_volume", "glass_unify_notifications")),
             group("backdrop-scope", "面板展开时的全屏背景", listOf("glass_shade_enabled")),
             group("independent-scopes", "负一屏与侧边栏", listOf("glass_assistant", "glass_sidebar", "glass_sidebar_unify")),
-            EditorItem.Group("shared-scopes", "与其他模块共用", rows("glass_media", "notification_lockscreen_effects") +
+            EditorItem.Group("shared-scopes", "与其他模块共用", rows("glass_media", "notification_lockscreen_effects", "notification_lockscreen_animations") +
                 EditorItem.Note("其他模块已接管音乐卡片或锁屏通知时，请关闭对应项，避免重复修改。")),
         )
         MaterialCategory.SURFACE -> {

@@ -67,4 +67,4 @@ internal fun materialSceneForCategory(category: MaterialCategory): GlassPlaygrou
 
 internal fun settingDisplayTitle(
     spec: LiteSetting, title: String = spec.title, compatibility: String = "（注意兼容）",
-): String = title + if (spec.key == SettingsMigration.MEDIA_KEY || spec.key == SettingsMigration.LOCKSCREEN_KEY) compatibility else ""
+): String = title + if (spec.key == SettingsMigration.MEDIA_KEY || spec.key == SettingsMigration.LOCKSCREEN_KEY || spec.key == SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY) compatibility else ""

@@ -17,6 +17,8 @@ internal object UiTextCatalog {
     private val scopeNote = Regex("^统一材质(开|关)；锁屏范围(开|关)（系统切换未模拟）$")
     private val sidebarNote = Regex("^统一侧栏(开|关)；系统侧栏配方未还原$")
     val resourceIds: Map<String, Int> = mapOf(
+        "含顶部横幅；锁屏需另开“锁屏通知材质”" to R.string.ui_copy_includes_top_banners_enable_lock_screen_notification_material_separate,
+        "其他模块已自定义播放器背景时关闭" to R.string.ui_copy_turn_off_when_another_module_customizes_the_player_background,
         "锁屏通知材质" to R.string.ui_copy_lock_screen_notification_material,
         "锁屏通知动画" to R.string.ui_copy_lock_screen_notification_animations,
         "注意兼容" to R.string.ui_copy_check_compatibility,

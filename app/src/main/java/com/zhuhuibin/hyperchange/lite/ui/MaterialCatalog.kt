@@ -25,7 +25,7 @@ enum class MaterialCategory(val title: String, val feature: Feature) {
         private val sharedScopeKeys = setOf(
             "glass_enabled", "glass_notifications", "glass_heads_up", SettingsMigration.MEDIA_KEY,
             "glass_control_center", "glass_volume", "glass_shade", "glass_unify_notifications",
-            "glass_assistant", "glass_sidebar", "glass_sidebar_unify", SettingsMigration.LOCKSCREEN_KEY,
+            "glass_assistant", "glass_sidebar", "glass_sidebar_unify", SettingsMigration.LOCKSCREEN_KEY, SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY,
         )
         private val notificationKeys = setOf("notification_radius_enabled", "notification_radius")
         private val volumeKeys = setOf(
