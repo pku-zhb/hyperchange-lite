@@ -5,10 +5,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationScopePolicyTest {
-    private val unlocked = NotificationScene(false, false, false, 0)
+    private val unlocked = NotificationScene(false, false, false, 0, 2, 2)
 
     @Test fun animationsRequireTheirOwnOptInOnSettledLitKeyguard() {
-        val locked = NotificationScene(true, false, false, 1)
+        val locked = NotificationScene(true, false, false, 1, 2, 2)
         assertFalse(NotificationScopePolicy.animationAllows(false, locked))
         assertTrue(NotificationScopePolicy.animationAllows(true, locked))
         assertTrue(NotificationScopePolicy.animationAllows(true, locked.copy(statusBarState = 2)))
@@ -17,7 +17,7 @@ class NotificationScopePolicyTest {
     }
 
     @Test fun animationOptInNeverAdmitsAodUnknownOrTransitioningScenes() {
-        val locked = NotificationScene(true, false, false, 1)
+        val locked = NotificationScene(true, false, false, 1, 2, 2)
         for (scene in listOf(NotificationScene(), locked.copy(dozing = true), locked.copy(dozing = null),
             locked.copy(transitioning = true), locked.copy(transitioning = null),
             locked.copy(showing = null), locked.copy(statusBarState = null), locked.copy(statusBarState = 0))) {
@@ -27,12 +27,23 @@ class NotificationScopePolicyTest {
     }
 
     @Test fun materialPermissionDoesNotAuthorizeAnyAnimationRole() {
-        val locked = NotificationScene(true, false, false, 1)
+        val locked = NotificationScene(true, false, false, 1, 2, 2)
         for (role in NotificationRole.entries) {
             assertTrue(NotificationScopePolicy.allows(role, true, locked))
             assertFalse(NotificationScopePolicy.animationAllows(false, locked))
             assertFalse(NotificationScopePolicy.animationAllows(true, locked.copy(dozing = true)))
         }
+    }
+
+    @Test fun screenOffAndWakeSleepTransitionsNeverOwnAnimationsEvenWithoutDozing() {
+        for (wakefulness in listOf(null, 0, 1, 3)) {
+            assertFalse(NotificationScopePolicy.animationAllows(true, unlocked.copy(wakefulness = wakefulness)))
+            assertFalse(NotificationScopePolicy.animationAllows(false, unlocked.copy(wakefulness = wakefulness)))
+            assertFalse(NotificationScopePolicy.animationAllows(true,
+                NotificationScene(true, false, false, 1, wakefulness, 2)))
+        }
+        for (screen in listOf(null, 0, 1, 3))
+            assertFalse(NotificationScopePolicy.animationAllows(true, unlocked.copy(screenState = screen)))
     }
 
     @Test fun ordinaryNotificationsRequireEveryUnlockedSignalWhenScopeIsOff() {

@@ -9,11 +9,13 @@ internal data class NotificationScene(
     val dozing: Boolean? = null,
     val transitioning: Boolean? = null,
     val statusBarState: Int? = null,
+    val wakefulness: Int? = null,
+    val screenState: Int? = null,
 ) {
     val confirmedUnlocked: Boolean
         get() = showing == false && dozing == false && transitioning == false && statusBarState == 0
     val confirmedLitKeyguard: Boolean
-        get() = showing == true && dozing == false && transitioning == false &&
+        get() = wakefulness == 2 && screenState == 2 && showing == true && dozing == false && transitioning == false &&
             (statusBarState == 1 || statusBarState == 2)
 }
 
@@ -23,7 +25,8 @@ internal object NotificationScopePolicy {
 
     /** Every animation role yields in unknown, AOD and transitioning scenes. */
     fun animationAllows(lockscreenAnimations: Boolean, scene: NotificationScene): Boolean =
-        scene.confirmedUnlocked || lockscreenAnimations && scene.confirmedLitKeyguard
+        scene.wakefulness == 2 && scene.screenState == 2 &&
+            (scene.confirmedUnlocked || lockscreenAnimations && scene.confirmedLitKeyguard)
 }
 
 /** A queued callback cannot regain ownership after a scope or role round trip. */

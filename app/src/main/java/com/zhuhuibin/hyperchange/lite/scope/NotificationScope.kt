@@ -29,6 +29,8 @@ internal object NotificationScope {
     @Volatile private var pendingTransitions = 0
     @Volatile private var keyguard = WeakReference<Any>(null)
     @Volatile private var statusBar = WeakReference<Any>(null)
+    @Volatile private var wakefulnessLifecycle = WeakReference<Any>(null)
+    @Volatile private var screenLifecycle = WeakReference<Any>(null)
     private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private class Decision(val view: View, val parent: Any?, val snapshot: NotificationScopeSnapshot)
     private val decisions = ThreadLocal<Decision>()
@@ -151,6 +153,13 @@ internal object NotificationScope {
             }
             type.declaredMethods.filter { it.name in names }.forEachIndexed { index, method ->
                 runtime.hook(method, "notification-scope:$className:${method.name}:$index") { chain ->
+                    val owner = chain.thisObject
+                    val first = if (method.parameterCount > 0) chain.getArg(0) else null
+                    val second = if (method.parameterCount > 1) chain.getArg(1) else null
+                    if (owner == null || !changesState(owner, method.name, first, second)) {
+                        try { return@hook chain.proceed() }
+                        finally { owner?.let(sample) }
+                    }
                     synchronized(this) { pendingTransitions++ }
                     // Enter the conservative state before OEM setters notify their observers.
                     if (method.name == "notifyKeyguardState" && chain.getArg(0) == true) {
@@ -164,8 +173,12 @@ internal object NotificationScope {
                     }
                     try { chain.proceed() }
                     finally {
-                        synchronized(this) { pendingTransitions-- }
+                        val settled = synchronized(this) { --pendingTransitions == 0 }
                         chain.thisObject?.let(sample)
+                        // Only a predicted real state change owns this boundary. Effects run
+                        // inside it were intentionally deferred until the outer call settled.
+                        if (settled)
+                            invalidate(sceneChanged = true, animationChanged = true)
                     }
                 }
                 installedSignals++
@@ -176,6 +189,23 @@ internal object NotificationScope {
         )) { owner -> keyguard = WeakReference(owner); refreshSnapshot() }
         observe("com.android.systemui.statusbar.StatusBarStateControllerImpl", setOf("setIsDozing", "setState")) { owner ->
             statusBar = WeakReference(owner)
+            refreshSnapshot()
+        }
+        observe("com.android.systemui.keyguard.WakefulnessLifecycle", setOf("dispatchStartedGoingToSleep",
+            "dispatchFinishedGoingToSleep", "dispatchStartedWakingUp", "dispatchFinishedWakingUp")) { owner ->
+            wakefulnessLifecycle = WeakReference(owner)
+            refreshSnapshot()
+        }
+        observe("com.android.systemui.keyguard.ScreenLifecycle", emptySet()) { owner ->
+            screenLifecycle = WeakReference(owner)
+            refreshSnapshot()
+        }
+        // The retained ROM writes mWakefulness directly in this exact handler; the
+        // lifecycle's named dispatch methods are absent after optimization.
+        observe("com.android.systemui.keyguard.KeyguardLifecyclesDispatcher\$KeyguardLifecycleHandler",
+            setOf("handleMessage")) { owner ->
+            runCatching { owner.read("mWakefulnessLifecycle") }.getOrNull()?.let { wakefulnessLifecycle = WeakReference(it) }
+            runCatching { owner.read("mScreenLifecycle") }.getOrNull()?.let { screenLifecycle = WeakReference(it) }
             refreshSnapshot()
         }
         runtime.type("com.android.systemui.statusbar.notification.row.ExpandableNotificationRow")?.declaredMethods
@@ -208,6 +238,24 @@ internal object NotificationScope {
     private fun readBoolean(owner: Any, field: String): Boolean? = runCatching { owner.read(field) as? Boolean }.getOrNull()
     private fun readInt(owner: Any, field: String): Int? = runCatching { owner.read(field) as? Int }.getOrNull()
 
+    private fun changesState(owner: Any, method: String, first: Any?, second: Any?): Boolean = when (method) {
+        "handleMessage" -> (first as? android.os.Message)?.let { message ->
+            val screen = runCatching { owner.read("mScreenLifecycle") }.getOrNull()
+            val wake = runCatching { owner.read("mWakefulnessLifecycle") }.getOrNull()
+            NotificationLifecycleTransitions.changes(message.what,
+                screen?.let { readInt(it, "mScreenState") }, wake?.let { readInt(it, "mWakefulness") })
+        } ?: false
+        "notifyKeyguardState" -> readBoolean(owner, "mShowing") != first || readBoolean(owner, "mOccluded") != second
+        "notifyKeyguardGoingAway" -> readBoolean(owner, "mKeyguardGoingAway") != first
+        "setIsDozing" -> readBoolean(owner, "mIsDozing") != first
+        "setState" -> readInt(owner, "mState") != first
+        "dispatchStartedWakingUp" -> readInt(owner, "mWakefulness") != 1
+        "dispatchFinishedWakingUp" -> readInt(owner, "mWakefulness") != 2
+        "dispatchStartedGoingToSleep" -> readInt(owner, "mWakefulness") != 3
+        "dispatchFinishedGoingToSleep" -> readInt(owner, "mWakefulness") != 0
+        else -> false
+    }
+
     @Synchronized private fun refreshSnapshot() {
         if (pendingTransitions > 0) return
         val keyguardOwner = keyguard.get()
@@ -222,7 +270,9 @@ internal object NotificationScope {
             else fading || miFading || (showing && away)
         update { copy(showing = showing, transitioning = transition,
             dozing = statusOwner?.let { readBoolean(it, "mIsDozing") },
-            statusBarState = statusOwner?.let { readInt(it, "mState") }) }
+            statusBarState = statusOwner?.let { readInt(it, "mState") },
+            wakefulness = wakefulnessLifecycle.get()?.let { readInt(it, "mWakefulness") },
+            screenState = screenLifecycle.get()?.let { readInt(it, "mScreenState") }) }
     }
 
     private fun update(change: NotificationScene.() -> NotificationScene) {

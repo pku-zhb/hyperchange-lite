@@ -26,6 +26,14 @@ internal class NotificationMaterial(
     private val knownRoots = WeakHashMap<View, NotificationScopeToken>()
     private val forcedRoots = WeakHashMap<View, MaterialOwnership>()
     private val convertedHeadsUpRoots = WeakHashMap<View, MaterialOwnership>()
+    private class LockscreenConversion(val effect: String, root: View, target: View) {
+        private val ticket = NotificationMaterialWrites.ticket(root)
+        private val background = WeakReference(target)
+        fun matches(target: View?): Boolean = target != null && background.get() === target
+        fun stillOwned(target: View?): Boolean = matches(target) && NotificationMaterialWrites.current(ticket)
+    }
+    private val convertedLockscreenRoots = WeakHashMap<View, LockscreenConversion>()
+    private val ordinaryDepth = ThreadLocal<Int>()
     private class Pending(val job: Runnable, val scope: NotificationScopeToken)
     private val pending = WeakHashMap<View, Pending>()
     private val refreshedRoots = NativeMaterialRefreshes<View, NotificationScopeToken>()
@@ -78,6 +86,7 @@ internal class NotificationMaterial(
         if (installedLoaders.put(loader, true) != null) return
         native.install(loader)
         installHeadsUpEffects(loader)
+        installLockscreenEffects(loader)
         val focus = listOf("FocusNotificationNormalEffect", "FocusNotificationNormalCustomBgEffect", "FocusNotificationBlurEffect", "FocusNotificationBlurOnKeyguardEffect", "FocusNotificationGlassEffect", "FocusNotificationGlassCustomBgEffect", "FocusNotificationGlassOnKeyguardEffect", "FocusNotificationGlassOnKeyguardLightWallPaperEffect", "FocusNotificationGlassFullAodEffect")
         val media = listOf("MediaViewNormalEffect", "MediaViewBlurEffect", "MediaViewBlurOnKeyguardEffect", "MediaViewGlassEffect", "MediaViewGlassOnKeyguardEffect", "MediaViewGlassOnKeyguardLightWallPaperEffect", "MediaViewGlassFullAodEffect")
         var found = 0
@@ -112,6 +121,92 @@ internal class NotificationMaterial(
         }
         runtime.log("Native notification material effects installed: $found")
     }
+
+    private fun lockscreenSelected(view: View): Boolean = tuning() && permitted(view) &&
+        NotificationScope.confirmedLitKeyguard() && !GlassSurfaces.excluded(view) &&
+        !GlassSurfaces.media(view) && !GlassSurfaces.headsUp(view) && !GlassSurfaces.focus(view)
+
+    /** Ordinary keyguard blur/normal effects have no glass token for the setter tuner to adjust. */
+    private fun installLockscreenEffects(loader: ClassLoader) {
+        val plain = setOf("NotificationRowNormalEffect", "NotificationRowBlurEffect", "NotificationRowBlurOnKeyguardEffect")
+        val names = plain + setOf("NotificationRowGlassEffect", "NotificationRowGlassOnKeyguardEffect",
+            "NotificationRowGlassOnKeyguardLightWallPaperEffect", "NotificationRowGlassFullAodEffect")
+        names.forEach { name ->
+            val type = runCatching { loader.loadClass(effectPrefix + name) }.getOrNull() ?: return@forEach
+            type.declaredMethods.filter { it.name == "apply" && it.parameterCount == 2 &&
+                it.parameterTypes[1] == Context::class.java }.forEachIndexed { index, method ->
+                runtime.hook(method, "lite-material:lockscreen:$name:$index") { chain ->
+                    val root = chain.getArg(0) as? View
+                    val context = chain.getArg(1) as? Context
+                    if (root == null || context == null || applying.get() == true || ordinaryDepth.get() == 1)
+                        return@hook chain.proceed()
+                    ordinaryDepth.set(1)
+                    try {
+                        retireLockscreenConversion(root, loader)
+                        val result = chain.proceed()
+                        synchronized(knownRoots) { knownRoots[root] = NotificationScope.token(root) }
+                        if (name in plain && lockscreenSelected(root)) {
+                            val effect = native.lockscreenGlassEffect(root)
+                            if (effect != null) applyLockscreenGlass(root, context, loader, effect)
+                        }
+                        result
+                    } finally { ordinaryDepth.remove() }
+                }
+            }
+            type.declaredMethods.filter { it.name == "clear" && it.parameterCount == 1 }.forEachIndexed { index, method ->
+                runtime.hook(method, "lite-material:lockscreen-clear:$name:$index") { chain ->
+                    val root = chain.getArg(0) as? View
+                    if (root != null && applying.get() != true) retireLockscreenConversion(root, loader)
+                    chain.proceed()
+                }
+            }
+        }
+    }
+
+    private fun effect(loader: ClassLoader, name: String): Any = requireNotNull(loader.loadClass(effectPrefix + name)
+        .getField("INSTANCE").get(null))
+
+    private fun applyLockscreenGlass(root: View, context: Context, loader: ClassLoader, name: String) {
+        val ticket = generation.value
+        val scene = NotificationScope.token(root)
+        runCatching {
+            val current = effect(loader, name)
+            val apply = current.javaClass.methods.single { it.name == "apply" && it.parameterCount == 2 }
+            if (materialTarget(root) == null) return
+            if (!generation.current(ticket, NotificationScope.isCurrent(root, scene) && lockscreenSelected(root)) ||
+                native.lockscreenGlassEffect(root) != name) return
+            applying.set(true)
+            try {
+                apply.invoke(current, root, context)
+                materialTarget(root)?.let { target -> synchronized(convertedLockscreenRoots) {
+                    convertedLockscreenRoots[root] = LockscreenConversion(name, root, target)
+                } }
+            } finally { applying.remove() }
+        }.onFailure { logOnce("Current keyguard glass effect unavailable; native row retained", it) }
+    }
+
+    private fun retireLockscreenConversion(root: View, loader: ClassLoader) {
+        val previous = synchronized(convertedLockscreenRoots) { convertedLockscreenRoots[root] } ?: return
+        // Clear only this conversion, before today's native selector applies its new effect.
+        val target = materialTarget(root)
+        if (!previous.matches(target) || !previous.stillOwned(target) && !native.selecting(root)) {
+            synchronized(convertedLockscreenRoots) { convertedLockscreenRoots.remove(root, previous) }
+            return
+        }
+        val cleared = runCatching {
+            val current = effect(loader, previous.effect)
+            val clear = current.javaClass.methods.single { it.name == "clear" && it.parameterCount == 1 }
+            applying.set(true)
+            try { clear.invoke(current, root) } finally { applying.remove() }
+        }.onFailure { logOnce("Keyguard glass cleanup deferred to the next native effect", it) }.isSuccess
+        if (cleared) synchronized(convertedLockscreenRoots) { convertedLockscreenRoots.remove(root, previous) }
+    }
+
+    private fun materialTarget(root: View): View? = runCatching {
+        val injector = root.javaClass.getMethod("getInjector").invoke(root) ?: return@runCatching null
+        (injector.javaClass.getMethod("getBackgroundNormal").invoke(injector) as? View)
+            ?.takeUnless(GlassSurfaces::excluded)
+    }.getOrNull()
 
     private fun headsUpAllowed(view: View): Boolean = headsUpSelected(view) && permitted(view) &&
         !GlassSurfaces.excluded(view) && !GlassSurfaces.media(view) && NotificationScope.confirmedUnlocked()
@@ -220,6 +315,17 @@ internal class NotificationMaterial(
             } else false
             if (canForgetMaterialState(allowed, stillOwned, transferred)) synchronized(convertedHeadsUpRoots) {
                 if (convertedHeadsUpRoots[view] === ownership) convertedHeadsUpRoots.remove(view)
+            }
+        }
+        val lockscreen = synchronized(convertedLockscreenRoots) { convertedLockscreenRoots.toMap() }
+        lockscreen.forEach { (view, conversion) ->
+            if (!lockscreenSelected(view) && conversion.stillOwned(materialTarget(view))) {
+                val reference = WeakReference(view)
+                requestRefresh(view, true) { reference.get()?.let {
+                    !lockscreenSelected(it) && conversion.stillOwned(materialTarget(it))
+                } == true }
+                // Keep the clear record until that current selector really applies an effect.
+                // AOD transition deferral or queue cancellation is not a completed handoff.
             }
         }
         // The OEM binder has seen ordinary rows and media even while our tuning

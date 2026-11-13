@@ -3,6 +3,7 @@ package com.zhuhuibin.hyperchange.lite.glass
 
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.HookRuntime
+import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
 import java.lang.reflect.Method
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
@@ -33,7 +34,13 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
                 val row = chain.getArg(1) as? View
                 // A new native selector run supersedes a previous conversion, even
                 // when it reuses the same background object and transition alpha.
-                if (row != null) NotificationMaterialWrites.touch(row)
+                val interactor = chain.getArg(0)
+                val aod = interactor?.let { field(it, "notifiFullAodController") }
+                val transition = aod?.let { field(it, "mWillDoAodAnim") } as? Boolean
+                if (row != null && LockscreenRowMaterialPolicy.selectorMayApply(transition,
+                        if (transition == true) call(interactor, "shouldApplyFullAodEffect") as? Boolean else null,
+                        if (transition == true) call(row, "isChildInGroup") as? Boolean else null))
+                    NotificationMaterialWrites.touch(row)
                 if (row != null && refreshing.get() != true) {
                     val args = Array<Any?>(4) { if (it == 1) null else chain.getArg(it) }
                     synchronized(rows) { rows[row] = RowBinding(update, args) }
@@ -67,10 +74,28 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
     fun roots(): List<View> = (synchronized(rows) { rows.keys.toList() } +
         synchronized(mediaInteractors) { mediaInteractors.filterValues { it.get() != null }.keys.toList() }).distinct()
 
+    /** Same state used by bindInternal$updateEffect, read only for its current ordinary row. */
+    fun lockscreenGlassEffect(view: View): String? {
+        val interactor = synchronized(rows) { rows[view] }?.args?.getOrNull(0) ?: return null
+        val aod = field(interactor, "notifiFullAodController") ?: return null
+        val delegate = field(interactor, "materialViewState\$delegate") ?: return null
+        val flow = call(delegate, "getValue") ?: return null
+        val current = call(flow, "getValue") ?: return null
+        return LockscreenRowMaterialPolicy.effect(NotificationScope.confirmedLitKeyguard(),
+            field(current, "isShowingKeyguardNotification") as? Boolean,
+            field(current, "isLightWallPaper") as? Boolean,
+            call(interactor, "shouldApplyFullAodEffect") as? Boolean,
+            field(aod, "mWillDoAodAnim") as? Boolean)
+    }
+
     fun refresh(view: View): Boolean {
         if (!view.isAttachedToWindow || refreshing.get() == true) return false
         if (GlassSurfaces.media(view)) return refreshMedia(view)
         val binding = synchronized(rows) { rows[view] } ?: return false
+        val interactor = binding.args.getOrNull(0) ?: return false
+        // The native selector intentionally does no material work during this transition.
+        val aod = field(interactor, "notifiFullAodController") ?: return false
+        if (field(aod, "mWillDoAodAnim") != false) return false
         refreshing.set(true)
         return try {
             // Target ROM's four-argument binder always selects/applies current flows.
@@ -114,4 +139,8 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
         }
         return null
     }
+
+    private fun call(owner: Any, name: String): Any? = runCatching {
+        owner.javaClass.getMethod(name).apply { isAccessible = true }.invoke(owner)
+    }.getOrNull()
 }
