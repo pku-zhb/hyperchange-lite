@@ -20,11 +20,21 @@ internal fun viewFor(target: Any?): View? {
     for (name in listOf("itemView", "view", "mView", "slider", "sliderView", "contentBg")) {
         (readField(target, name) as? View)?.let { return it }
     }
-    for (name in listOf("getView", "getContentBg", "getSliderView")) {
+    for (name in listOf("getView", "getContentBg", "getSliderView", "getSecondaryPanelContainer")) {
         runCatching { target?.javaClass?.getMethod(name)?.invoke(target) as? View }.getOrNull()?.let { return it }
     }
     sliderParts(target).firstOrNull()?.let { return it }
     return null
+}
+
+/** Outline and fill have independent native radii; neither can stand in for the other. */
+internal fun sliderRadiusParts(target: Any?, progress: Boolean): List<View> {
+    target ?: return emptyList()
+    val binding = readField(target, "binding")
+    val fromBinding = readField(binding, if (progress) "progress" else "progressBg") as? View
+    val getter = if (progress) "getVProgress" else "getVProgressBg"
+    val fromGetter = runCatching { target.javaClass.getMethod(getter).invoke(target) as? View }.getOrNull()
+    return listOfNotNull(fromBinding, fromGetter).distinct()
 }
 
 internal fun sliderParts(target: Any?): List<View> {

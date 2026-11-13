@@ -32,12 +32,19 @@ class ControlVolumeHooks {
     private val panels = WeakHashMap<View, Boolean>()
     private val refreshing = ThreadLocal<Boolean>()
     private val radiusDispatch = ThreadLocal<String>()
+    private val sliderRefresh = ThreadLocal<Boolean>()
+    private var pendingRefresh: Runnable? = null
 
     fun install(runtime: HookRuntime) {
         val p = runtime.preferences
         preferences = p
         if (listener == null) {
-            listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> main.post { refresh() } }
+            listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == null || key.startsWith("cc_") || key.startsWith("volume_") || key.startsWith("notification_radius")) {
+                    pendingRefresh?.let(main::removeCallbacks)
+                    pendingRefresh = Runnable { pendingRefresh = null; refresh() }.also { main.post(it) }
+                }
+            }
             p.registerOnSharedPreferenceChangeListener(listener)
         }
         installDimensions(runtime)
@@ -46,8 +53,11 @@ class ControlVolumeHooks {
             Triple("miui.systemui.controlcenter.panel.main.media.MediaPlayerPanel", "setCornerRadius", "cc_media_radius"),
             Triple("miui.systemui.controlcenter.panel.main.media.MediaPlayerController\$MediaPlayerViewHolder", "setCornerRadius", "cc_media_radius"),
             Triple("miui.systemui.controlcenter.panel.main.recyclerview.ToggleSliderViewHolder", "setOutlineRadius", "cc_slider_radius"),
+            Triple("miui.systemui.controlcenter.panel.main.recyclerview.ToggleSliderViewHolder", "setProgressRadius", "cc_slider_radius"),
             Triple("miui.systemui.controlcenter.panel.secondary.brightness.BrightnessPanelSliderDelegate", "setOutlineRadius", "cc_slider_radius"),
+            Triple("miui.systemui.controlcenter.panel.secondary.brightness.BrightnessPanelSliderDelegate", "setProgressRadius", "cc_slider_radius"),
             Triple("miui.systemui.controlcenter.panel.secondary.volume.VolumePanelController", "getCornerRadius", "cc_slider_radius"),
+            Triple("miui.systemui.controlcenter.panel.secondary.volume.VolumePanelController", "getProgressRadius", "cc_slider_radius"),
             Triple("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", "setCornerRadius", "cc_tile_radius"),
             Triple("miui.systemui.controlcenter.panel.secondary.SecondaryPanelControllerBase", "setContentBgRadius", "cc_secondary_radius"),
         )
@@ -85,7 +95,7 @@ class ControlVolumeHooks {
                                 (view.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).cornerRadius = args[0] as Float }
                             }
                             if (key == "cc_slider_radius") {
-                                sliderParts(receiver).forEach { part ->
+                                sliderRadiusParts(receiver, method.name == "setProgressRadius").forEach { part ->
                                     (part.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).cornerRadius = args[0] as Float }
                                 }
                             }
@@ -97,11 +107,51 @@ class ControlVolumeHooks {
                 }
             }
         }
+        installSliderRefresh(runtime)
         installDeviceOutline(runtime)
         installVolumeRadius(runtime, "VolumeColumnRes", "volume_corner_enabled", "volume_corner")
         installVolumeRadius(runtime, "TimerItemRes", "volume_timer_corner_enabled", "volume_timer_corner")
         installVolume(runtime)
         runtime.log("Control/volume radius setters available: $radiusTargets")
+    }
+
+    /** Native theme/resource changes replace the track drawables without calling radius setters. */
+    private fun installSliderRefresh(runtime: HookRuntime) {
+        val names = listOf(
+            "miui.systemui.controlcenter.panel.main.recyclerview.ToggleSliderViewHolder",
+            "miui.systemui.controlcenter.panel.secondary.brightness.BrightnessPanelSliderDelegate",
+        )
+        fun update(owner: Any?) {
+            if (owner == null || sliderRefresh.get() == true || preferences?.getBoolean("cc_radius_enabled", false) != true) return
+            sliderRefresh.set(true)
+            val previous = refreshing.get()
+            refreshing.set(true)
+            try {
+                for ((setter, getter) in listOf("setOutlineRadius" to "getOutlineRadius", "setProgressRadius" to "getProgressRadius")) {
+                    val method = owner.javaClass.getMethod(setter, Float::class.javaPrimitiveType!!)
+                    val incoming = radiusCalls[owner]?.get(method)?.original
+                        ?: (owner.javaClass.getMethod(getter).invoke(owner) as? Number)?.toFloat() ?: continue
+                    method.invoke(owner, incoming)
+                }
+            } finally {
+                if (previous == null) refreshing.remove() else refreshing.set(previous)
+                sliderRefresh.remove()
+            }
+        }
+        for (name in names) {
+            val type = runtime.type(name) ?: continue
+            val methods = type.declaredMethods.filter { it.name in setOf("updateResources", "updateSize", "onConfigurationChanged",
+                "applyMaterialBackground", "updateBlendBlur", "onMaterialModeChanged", "prepareShow", "onShown") }
+            val entries = type.declaredConstructors.toList() + methods
+            entries.forEachIndexed { index, method ->
+                runtime.hook(method, "slider-radius:lifecycle:$name:$index") { chain ->
+                    val result = chain.proceed()
+                    runCatching { update(chain.thisObject) }
+                        .onFailure { runtime.log("Slider radius retained its native layout", it) }
+                    result
+                }
+            }
+        }
     }
 
     private fun number(key: String, fallback: Float) = preferences?.getFloat(key, fallback) ?: fallback

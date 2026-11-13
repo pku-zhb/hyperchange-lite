@@ -1,0 +1,37 @@
+# Control-center slider corners
+
+## Confirmed native contracts
+
+The retained control-center plugin exposes independent `setOutlineRadius(float)`
+and `setProgressRadius(float)` methods on ToggleSliderViewHolder and
+BrightnessPanelSliderDelegate. Their native view-outline providers read different
+fields for the background and the filled progress. The previous adapter only
+observed outline setters, so a normal native size update could leave the fill at
+its original radius even when the track used the configured radius.
+
+ToggleSliderViewHolder.updateSize explicitly calls both setters. Its separate
+updateResources replaces both progress/background drawables without a radius
+setter. Material/configuration changes can therefore also replace the drawable
+under a previously customized field. Brightness has a corresponding material
+background/size lifecycle. Exact primary method evidence is retained outside Git
+under the owning development cache, not redistributed as decompiled source.
+
+## Repair and limits
+
+- Both setter channels now consume the slider radius. Background and fill keep
+  independent latest-native baselines and update only their own drawable.
+- Exact constructor, resource, size, material and show callbacks reapply their
+  current native input through the existing setter adapter. A reentry guard
+  prevents lifecycle recursion. No drawing/touch hook or per-frame tree scan is
+  added. Disabled settings do not acquire new lifecycle ownership.
+- The existing current-property baseline restores each channel independently;
+  a new size/density write becomes its new native baseline. Secondary volume
+  getter routing now resolves its actual secondary container and progress radius.
+- Preference refreshes are coalesced and limited to radius/volume edits, avoiding
+  unrelated material-slider writes repeatedly replaying native radius calls.
+
+Two focused state regressions check independent track/fill restoration, resource
+replay without baseline recapture, and a later native density/size change. Full
+Android compilation/lint and native visual acceptance are separate checks. This
+iteration performs no phone access, installation or scope restart. The source
+fix does not claim that an unobserved third-party direct native write is intercepted.
