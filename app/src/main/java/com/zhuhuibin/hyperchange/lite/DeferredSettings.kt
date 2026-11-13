@@ -6,6 +6,6 @@ internal object DeferredSettings {
     val hiddenKeys = setOf(
         "notification_group_stack_enabled", "notification_group_stack_spacing",
         "notification_group_stack_scale", "notification_disable_fold_history_enabled",
-        "glass_shade",
+        "glass_shade", "glass_shade_scale",
     )
 }

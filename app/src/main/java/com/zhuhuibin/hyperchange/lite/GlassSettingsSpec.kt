@@ -19,9 +19,9 @@ object GlassSettingsSpec {
         add(LiteSetting.number("glass_background_blur", "卡片后方模糊", "卡片取样", 100f, 0f, 200f, summary = "只调卡片背后取样；100% 保留系统值，不改变整屏下拉背景"))
         add(LiteSetting.number("glass_background_scale", "卡片取样尺度", "卡片取样", 100f, 0f, 200f, summary = "只改变卡片背后取样尺度；100% 保留系统值"))
         add(LiteSetting.number("glass_background_opacity", "卡片底色浓度", "卡片取样", 100f, 0f, 200f, summary = "只调卡片底色；100% 保留系统值，不改变整屏遮罩"))
-        add(LiteSetting.number("glass_shade_blur", "整屏背景模糊", "整屏背景", 100f, 0f, 200f, summary = "只调已展开通知中心和控制中心的底层背景；100% 保留系统值，悬浮通知不生效"))
+        add(LiteSetting.number("glass_shade_blur", "背景模糊", "整屏背景", 100f, 0f, 200f, summary = "0% 去掉下拉面板后方模糊；100% 保留系统值"))
         add(LiteSetting.number("glass_shade_scale", "整屏额外缩放", "整屏背景", 100f, 0f, 200f, summary = "0% 不额外缩放；100% 保留系统值"))
-        add(LiteSetting.number("glass_shade_opacity", "整屏背景色浓度", "整屏背景", 100f, 0f, 200f, summary = "只调已展开面板的整屏遮罩；100% 保留系统值，独立于卡片预设"))
+        add(LiteSetting.number("glass_shade_opacity", "背景遮罩", "整屏背景", 100f, 0f, 200f, summary = "0% 去掉下拉面板后方遮罩；100% 保留系统值"))
         softGlassParameters.forEach { p ->
             add(LiteSetting.number("glass_${p.key}", materialTitle(p.key, p.title), "材质细调", if (p.key == "darker") -100f else 0f,
                 p.adjustmentRange.first.toFloat(), p.adjustmentRange.last.toFloat(), summary = when (p.key) {

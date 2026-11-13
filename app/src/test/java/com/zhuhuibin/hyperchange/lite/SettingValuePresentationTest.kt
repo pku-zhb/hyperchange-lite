@@ -31,6 +31,18 @@ class SettingValuePresentationTest {
         assertEquals("dp", LiteCatalog.entries.first { it.key == "volume_thin_width" }.valueUnit)
     }
 
+    @Test fun fullWindowControlsCanReachClearAndOriginalWithoutChangingBackups() {
+        for (key in listOf("glass_shade_blur", "glass_shade_opacity")) {
+            val spec = LiteCatalog.entries.first { it.key == key }
+            assertEquals(0f..100f, spec.sliderRange)
+            assertEquals(100f, spec.defaultValue)
+            assertEquals(200f, SettingsCodec.decode(listOf(spec),
+                SettingsCodec.encode(listOf(spec), mapOf(spec.key to 200f)))[spec.key])
+        }
+        assertTrue("glass_shade_scale" in DeferredSettings.hiddenKeys)
+        assertTrue(LiteCatalog.entries.any { it.key == "glass_shade_scale" })
+    }
+
     @Test fun edgeGapUsesASmallPixelSliderWithoutLimitingImportedPositions() {
         val spec = LiteCatalog.entries.first { it.key == "volume_edge_gap" }
         assertEquals(0f..32f, spec.sliderRange)

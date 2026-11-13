@@ -48,7 +48,7 @@ class PreviewMaterialStateTest {
         val shade = previewMaterialState("SHADE", values, saved.copy(enabled = false), true)
         assertTrue(shade.settings.enabled)
         assertEquals(35, shade.settings.backgroundBlur)
-        assertEquals(24, shade.settings.backgroundScale)
+        assertEquals(100, shade.settings.backgroundScale)
         assertEquals(75, shade.settings.backgroundOpacity)
         assertEquals(100, shade.settings.refractionBlur)
         assertTrue(shade.settings.adjustments.values.all { it == 0 })
@@ -82,7 +82,7 @@ class PreviewMaterialStateTest {
         val shade = previewMaterialState("SHADE", old, saved.copy(enabled = false), true)
         assertTrue(shade.settings.enabled)
         assertEquals(42, shade.settings.backgroundBlur)
-        assertEquals(18, shade.settings.backgroundScale)
+        assertEquals(100, shade.settings.backgroundScale)
         assertEquals(67, shade.settings.backgroundOpacity)
         assertFalse(previewMaterialState("SHADE", old + ("glass_shade" to false), saved, true).settings.enabled)
     }

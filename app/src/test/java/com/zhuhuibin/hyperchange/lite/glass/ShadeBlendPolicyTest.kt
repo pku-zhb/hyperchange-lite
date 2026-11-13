@@ -15,13 +15,14 @@ class ShadeBlendPolicyTest {
     @Test fun tintUsesNativeAlphaWhileOtherModesRemainUntouched() {
         val tint = 0x80604020.toInt()
         for (percent in listOf(0, 25, 50, 100, 150, 200)) {
-            assertEquals(softGlassColorAlpha(tint, percent), shadeBlendColor(tint, 106, percent))
+            for (mode in listOf(9, 106))
+                assertEquals(softGlassColorAlpha(tint, percent), shadeBlendColor(tint, mode, percent))
             for (mode in listOf(21, 0, 3, 24, 999)) assertEquals(tint, shadeBlendColor(tint, mode, percent))
         }
     }
 
     @Test fun disabledOrNativeBaselineKeepsAllColorBits() {
         for (color in listOf(0, 0xff0d8000.toInt(), 0x52800000, 0x80ffffff.toInt()))
-            for (mode in listOf(21, 106, 999)) assertEquals(color, shadeBlendColor(color, mode, 100))
+            for (mode in listOf(9, 21, 106, 999)) assertEquals(color, shadeBlendColor(color, mode, 100))
     }
 }

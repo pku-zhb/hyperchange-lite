@@ -13,6 +13,7 @@ internal object GlassSurfaces {
     private val volumeIds = setOf("blur_frame", "volume_column_slider", "volume_column_slider_bg_glass", "volume_column_slider_bg_blend")
     private val mediaIds = setOf("media_bg", "media_background", "media_card_background")
     private val mediaRoots = WeakHashMap<View, Boolean>()
+    private val windowBackdrops = WeakHashMap<View, Boolean>()
     private val roleAccessors = SurfaceRoleAccessors()
     private val decisions = MaterialCallMemo<View, Facts, Long>()
     private val resourceNames = ResourceNameCache<android.content.res.Resources>()
@@ -84,6 +85,9 @@ internal object GlassSurfaces {
 
     private fun classifyNow(view: View): GlassSurface? {
         if (excluded(view)) return null
+        if (isShadeWindow(view)) return GlassSurface.SHADE
+        if (synchronized(windowBackdrops) { windowBackdrops.containsKey(view) } &&
+            row(view) == null && !media(view)) return GlassSurface.SHADE
         val name = view.javaClass.name
         val resource = id(view)
         // The OEM effect can write the header/root as well as its background. Determine
@@ -106,6 +110,15 @@ internal object GlassSurfaces {
     }
 
     fun isShadeWindow(view: View): Boolean = view.javaClass.name == "com.android.systemui.shade.NotificationShadeWindowView"
+
+    /** Only the exact native whole-panel BlurProvider can supply this identity. */
+    fun markWindowBackdrop(view: View) {
+        if (synchronized(windowBackdrops) { windowBackdrops.containsKey(view) }) return
+        if (!excluded(view) && row(view) == null && !media(view)) {
+            synchronized(windowBackdrops) { windowBackdrops[view] = true }
+            decisions.forget(view)
+        }
+    }
 
     /** Effect entry supplies identity for an OEM plain FrameLayout before attachment. */
     fun markMediaRoot(view: View) {

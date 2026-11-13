@@ -29,7 +29,7 @@ class GlassSettingsSnapshotTest {
         assertEquals(20, state.glass.adjustments["refraction"])
         assertTrue(state.shade)
         assertEquals(90, state.shadeGlass.backgroundBlur)
-        assertEquals(0, state.shadeGlass.backgroundScale)
+        assertEquals(100, state.shadeGlass.backgroundScale)
         assertEquals(73, state.shadeGlass.backgroundOpacity)
         assertTrue(state.shadeGlass.adjustments.values.all { it == 0 })
     }

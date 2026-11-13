@@ -29,7 +29,8 @@ private fun resolvedShadeGlassSettings(resolved: Map<String, *>, enabled: Boolea
     return SoftGlassSettings(
         enabled = enabled ?: resolved[SettingsMigration.BACKDROP_ENABLED_KEY] as Boolean,
         backgroundBlur = (resolved.getValue("glass_shade_blur") as Number).toFloat().roundToInt(),
-        backgroundScale = (resolved.getValue("glass_shade_scale") as Number).toFloat().roundToInt(),
+        // Retained in storage/exports only; whole-window controls do not zoom the App.
+        backgroundScale = 100,
         backgroundOpacity = (resolved.getValue("glass_shade_opacity") as Number).toFloat().roundToInt(),
     ).normalized()
 }

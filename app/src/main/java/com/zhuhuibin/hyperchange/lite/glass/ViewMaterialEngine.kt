@@ -67,7 +67,8 @@ internal class ViewMaterialEngine(
     private var refresh: Runnable? = null
     private val refreshPlan = MaterialRefreshPlan()
     private class Prepared(val input: Array<Any?>, val args: Array<Any?>, val ticket: Long,
-                           val scene: NotificationScopeSnapshot?, val parent: Any?, val backdropRevision: Long?)
+                           val scene: NotificationScopeSnapshot?, val parent: Any?, val backdropRevision: Long?,
+                           val suppress: Boolean = false)
 
     /** No fact or permission memo survives a native call; heads-up state can change there. */
     private fun <T> prepare(view: View, action: (GlassSurface?, NotificationScopeSnapshot?) -> T): T =
@@ -117,6 +118,7 @@ internal class ViewMaterialEngine(
         setter("setMiGlass", FloatArray::class.java)
         setter("setMiGlassBlurRadius", Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlurRadius", Int::class.javaPrimitiveType!!)
+        setter("setMiBackgroundBlurMode", Int::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlurScaleRatio", Float::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlendColors", ArrayList::class.java)
         setter("setMiSelfBlur", Int::class.javaPrimitiveType!!, ArrayList::class.java)
@@ -159,6 +161,7 @@ internal class ViewMaterialEngine(
                     val allowed = scopeAllows(view)
                     if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
                     if (name == "setMiSelfBlur" && !windowSelfBlur && surface != GlassSurface.SHADE) return@prepare null
+                    if (name == "setMiBackgroundBlurMode" && surface != GlassSurface.SHADE) return@prepare null
                     if (name == "setBackgroundColor" && surface != GlassSurface.SHADE) {
                         // A different owner's plain background supersedes our old material.
                         if (surface == GlassSurface.NOTIFICATION) { NotificationMaterialWrites.touch(view); forget(view) }
@@ -225,31 +228,38 @@ internal class ViewMaterialEngine(
         val output: Array<Any?> = when (name) {
             "setMiGlass" -> {
                 val native = baseline[0] as FloatArray
-                // Whole-panel glass keeps its OEM optical token. Only the card
-                // layer accepts global recipes, refraction and fourteen-slot tuning.
-                if (isBackdrop(view)) arrayOf(native)
+                // Whole-panel glass never accepts a card recipe. Its native optical
+                // token is removed only for the explicit fully transparent state.
+                if (isBackdrop(view)) arrayOf(if (WindowBackdropPolicy.transparent(settings)) null else native)
                 else {
                     val selected = unifiedRecipe(view)?.takeIf(::hasSoftGlassRecipe) ?: native
                     arrayOf(if (settings.enabled) tuneSoftGlass(selected, settings, contextBrightness = contextBrightness(view)) else selected)
                 }
             }
-            "setMiGlassBlurRadius" -> arrayOf(
-                if (settings.enabled && !isBackdrop(view)) softGlassBlur(baseline[0] as Int, settings.refractionBlur) else baseline[0],
-                if (settings.enabled && !isBackdrop(view)) softGlassBlur(baseline[1] as Int, settings.refractionBlur) else baseline[1],
-            )
+            "setMiGlassBlurRadius" -> {
+                val percent = if (isBackdrop(view)) settings.backgroundBlur else settings.refractionBlur
+                arrayOf(WindowBackdropPolicy.radius(baseline[0] as Int, settings.enabled, percent),
+                    WindowBackdropPolicy.radius(baseline[1] as Int, settings.enabled, percent))
+            }
+            "setMiBackgroundBlurMode" -> arrayOf(if (isBackdrop(view) && WindowBackdropPolicy.transparent(settings)) 0 else baseline[0])
             "setMiBackgroundBlurRadius" -> arrayOf(if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.backgroundBlur) else baseline[0])
-            "setMiBackgroundBlurScaleRatio" -> arrayOf(if (settings.enabled) softGlassScale(baseline[0] as Float, settings.backgroundScale) else baseline[0])
+            "setMiBackgroundBlurScaleRatio" -> arrayOf(if (isBackdrop(view)) baseline[0] else if (settings.enabled) softGlassScale(baseline[0] as Float, settings.backgroundScale) else baseline[0])
             "setMiBackgroundBlendColors" -> arrayOf(if (isBackdrop(view))
-                shadePoints(baseline[0], if (settings.enabled) settings.backgroundOpacity else 100)
+                shadePoints(baseline[0], if (settings.enabled) settings.backgroundOpacity else 100,
+                    WindowBackdropPolicy.transparent(settings))
                 else points(unifiedBlends(view) ?: baseline[0], opacity(view, settings)))
             "setMiSelfBlur" -> arrayOf(
                 if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.backgroundBlur) else baseline[0],
-                shadePoints(baseline[1], if (settings.enabled) settings.backgroundOpacity else 100),
+                shadePoints(baseline[1], if (settings.enabled) settings.backgroundOpacity else 100,
+                    WindowBackdropPolicy.transparent(settings)),
             )
             "setBackgroundColor" -> arrayOf(if (settings.enabled) softGlassColorAlpha(baseline[0] as Int, settings.backgroundOpacity) else baseline[0])
             else -> baseline
         }
-        if (name == "setMiGlass") synchronized(baselines) { arrayPairs[view] = (baseline[0] as FloatArray) to (output[0] as FloatArray) }
+        if (name == "setMiGlass") synchronized(baselines) {
+            val result = output[0] as? FloatArray
+            if (result == null) arrayPairs.remove(view) else arrayPairs[view] = (baseline[0] as FloatArray) to result
+        }
         if (recordOwnership && !sameArgs(input, output)) synchronized(baselines) { owned[view] = Ownership(view) }
         return output
     }
@@ -301,15 +311,19 @@ internal class ViewMaterialEngine(
                         if (settings.enabled) settings.backgroundOpacity else 100)
                     else softGlassColorAlpha(color, opacity(view, settings))
                     Prepared(arrayOf(color, mode), arrayOf(tuned, mode), ticket, scene, parent,
-                        if (isBackdrop(view)) ShadeScope.generation else null)
+                        if (isBackdrop(view)) ShadeScope.generation else null,
+                        isBackdrop(view) && WindowBackdropPolicy.transparent(settings))
                 } ?: return@hook if (skipBackdropReplay(view)) null else chain.proceed()
                 if (!ready(view, prepared)) {
                     forget(view)
                     return@hook if (skipBackdropReplay(view)) null else chain.proceed()
                 }
-                val result = chain.proceedWith(view, prepared.args)
+                // A structural blend still changes the sampled App when its tint is
+                // zero. In the explicit transparent state, keep its native baseline
+                // for restoration but do not add it to the render node.
+                val result = if (prepared.suppress) null else chain.proceedWith(view, prepared.args)
                 if (current(view, prepared))
-                    synchronized(baselines) { if (!sameArgs(prepared.input, prepared.args) || owned.containsKey(view)) owned[view] = Ownership(view) }
+                    synchronized(baselines) { if (prepared.suppress || !sameArgs(prepared.input, prepared.args) || owned.containsKey(view)) owned[view] = Ownership(view) }
                 else forget(view)
                 result
             }
@@ -389,8 +403,9 @@ internal class ViewMaterialEngine(
         }
     }.toTypedArray()
 
-    private fun shadePoints(input: Any?, percent: Int): ArrayList<Point> = ArrayList(
-        (input as? List<*>)?.filterIsInstance<Point>()?.map { Point(shadeBlendColor(it.x, it.y, percent), it.y) } ?: emptyList()
+    private fun shadePoints(input: Any?, percent: Int, transparent: Boolean = false): ArrayList<Point> = ArrayList(
+        if (transparent) emptyList() else
+            (input as? List<*>)?.filterIsInstance<Point>()?.map { Point(shadeBlendColor(it.x, it.y, percent), it.y) } ?: emptyList()
     )
 
     private fun points(input: Any?, percent: Int): ArrayList<Point> = ArrayList(

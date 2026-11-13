@@ -1,5 +1,9 @@
 # Independent card and whole-window materials
 
+The 0.1.6 runtime/preview correction supersedes the whole-window details below;
+see [Whole-window shade backdrop](WHOLE_WINDOW_BACKDROP_016.md). This document
+retains the 0.1.4 storage and migration history.
+
 Version 0.1.4 separates the glass card's sampled backdrop from the whole-window
 notification/control-center backdrop. Their values, enable switches and queued
 refresh requests are independent. The 0.1.3 expansion, window ownership and

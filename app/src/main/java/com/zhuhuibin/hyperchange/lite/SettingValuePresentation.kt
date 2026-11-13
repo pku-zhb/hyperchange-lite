@@ -7,9 +7,10 @@ internal val LiteSetting.sliderRange: ClosedFloatingPointRange<Float>
         val preferred = when {
             key == "glass_darker" -> -100f..0f
             key == "glass_refraction_blur" -> 0f..120f
-            key == "glass_background_blur" || key == "glass_shade_blur" -> 40f..140f
+            key == "glass_shade_blur" || key == "glass_shade_opacity" -> 0f..100f
+            key == "glass_background_blur" -> 40f..140f
             key == "glass_background_scale" || key == "glass_shade_scale" -> 0f..120f
-            key == "glass_background_opacity" || key == "glass_shade_opacity" -> 40f..140f
+            key == "glass_background_opacity" -> 40f..140f
             key.startsWith("glass_") -> -30f..30f
             key == "notification_press_tilt_max_deg" -> 2f..8f
             key == "notification_press_tilt_scale" -> .92f..1f

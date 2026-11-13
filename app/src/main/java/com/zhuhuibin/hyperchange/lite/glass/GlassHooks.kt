@@ -35,6 +35,7 @@ private class SystemGlass(private val runtime: HookRuntime) {
         notificationPolicy().force(GlassSurfaces.media(view), NotificationScope.sceneAllows(view),
             NotificationScope.role(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
     }
+    private val window = WindowBackdropHooks(runtime) { state.shadeGlass }
     private val engine = ViewMaterialEngine(runtime, { GlassSurfaces.classify(it) != null }, { view ->
         val surface = GlassSurfaces.classify(view)
         val backdrop = surface == GlassSurface.SHADE || GlassSurfaces.isShadeWindow(view)
@@ -76,6 +77,7 @@ private class SystemGlass(private val runtime: HookRuntime) {
                 if (cards) runCatching { normal.refresh() }
                     .onFailure { runtime.log("Notification material refresh cancelled safely", it) }
                 if (cards || backdrops) engine.scheduleRefresh(cards = cards, backdrops = backdrops)
+                if (backdrops) window.scheduleRefresh()
             }
         }
     }
@@ -85,9 +87,11 @@ private class SystemGlass(private val runtime: HookRuntime) {
         ShadeScope.addListener {
             engine.retireInactiveBackdrops()
             engine.scheduleRefresh(sceneOnly = true)
+            window.scheduleRefresh()
         }
         runtime.preferences.registerOnSharedPreferenceChangeListener(listener)
         engine.install()
+        window.install()
     }
     private fun refresh(sceneOnly: Boolean = false) {
         runCatching { normal.refresh(sceneOnly) }.onFailure { runtime.log("Notification material refresh cancelled safely", it) }

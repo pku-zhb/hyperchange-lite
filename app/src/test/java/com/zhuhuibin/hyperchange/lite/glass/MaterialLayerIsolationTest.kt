@@ -25,7 +25,7 @@ class MaterialLayerIsolationTest {
             assertEquals(100, settings.refractionBlur)
             assertArrayEquals(source, tuneSoftGlass(source, settings), 0f)
             assertEquals(112, softGlassBlur(80, settings.backgroundBlur))
-            assertEquals(.02f, softGlassScale(.08f, settings.backgroundScale), .000001f)
+            assertEquals(.08f, softGlassScale(.08f, settings.backgroundScale), .000001f)
             assertEquals(0x53445566, softGlassColorAlpha(0x80445566.toInt(), settings.backgroundOpacity))
         }
     }
@@ -49,12 +49,21 @@ class MaterialLayerIsolationTest {
         assertFalse(shadeGlassSettings(off + mapOf("glass_enabled" to true, "glass_shade" to true)).enabled)
     }
 
+    @Test fun historicalWindowScaleRemainsExportedWithoutChangingRuntime() {
+        val legacy = SettingsMigration.resolve(whole + ("glass_shade_scale" to 0f))
+        assertEquals(0f, legacy["glass_shade_scale"])
+        assertEquals(100, shadeGlassSettings(legacy).backgroundScale)
+        val otherScale = SettingsMigration.resolve(legacy + ("glass_shade_scale" to 200f))
+        assertEquals(200f, otherScale["glass_shade_scale"])
+        assertEquals(shadeGlassSettings(legacy), shadeGlassSettings(otherScale))
+    }
+
     @Test fun oldHookSnapshotResolvesBothLayersBeforeTheSettingsAppOpens() {
         val old = mapOf("glass_background_blur" to 35f, "glass_background_scale" to 64f,
             "glass_background_opacity" to 45f, "glass_alpha" to 200f)
         val settings = shadeGlassSettings(old, enabled = true)
         assertEquals(35, settings.backgroundBlur)
-        assertEquals(64, settings.backgroundScale)
+        assertEquals(100, settings.backgroundScale)
         assertEquals(45, settings.backgroundOpacity)
         assertArrayEquals(source, tuneSoftGlass(source, settings), 0f)
     }
