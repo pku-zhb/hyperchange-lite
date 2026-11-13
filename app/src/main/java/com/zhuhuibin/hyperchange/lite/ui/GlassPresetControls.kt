@@ -46,11 +46,11 @@ internal fun GlassPresetControls(
     ) {
         Card(Modifier.fillMaxWidth()) {
             BasicComponent(
-                title = "当前参数：${current?.title ?: "自定义"}${if (enabled) "" else "（系统柔光已暂停）"}",
-                summary = "HyperChanger 原版六套材质。应用时开启柔光调节，保留当前作用范围和统一材质选择。",
+                title = "当前参数：${current?.title ?: "自定义"}${if (enabled) "" else "（系统材质调节已关闭）"}",
+                summary = "点按预设即可应用，并开启系统材质调节。生效位置、材质统一和通知动画保留原设置。",
             )
         }
-        PresetHint("选用“对比测试图”背景，在“澄光”和“凝雾”之间切换，观察上方固定预览的边缘、折射和背景模糊。")
+        PresetHint("可在“预览选项”中更换背景，再用下面两套预设对比模糊与边缘效果。")
 
         SmallTitle("快速对比")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -60,12 +60,12 @@ internal fun GlassPresetControls(
                 }
             }
         }
-        SmallTitle("全部原版预设")
+        SmallTitle("全部材质预设")
         Card(Modifier.fillMaxWidth()) {
             builtInGlassPresets.forEach { preset ->
                 ArrowPreference(
-                    title = preset.title + if (preset.id == current?.id) " · 当前参数" else "",
-                    summary = "${preset.description} · 点击应用",
+                    title = preset.title + if (preset.id == current?.id) "（当前参数）" else "",
+                    summary = preset.description,
                     onClick = { onApply(preset) },
                 )
             }
@@ -74,11 +74,11 @@ internal fun GlassPresetControls(
         if (hasUndo) Card(Modifier.fillMaxWidth()) {
             ArrowPreference(
                 title = "还原试用前材质",
-                summary = "恢复首次试用前的材质参数和柔光调节开关。",
+                summary = "恢复本轮首次应用预设前的玻璃参数和系统材质调节开关。",
                 onClick = onUndo,
             )
         }
-        PresetHint("音乐接管、锁屏通知及其他功能按你原来的开关工作。预设会保留这些设置；音乐由 HMC 自定义时，继续关闭 Lite 音乐接管。")
+        PresetHint("预设来自 HyperChanger。音乐使用 HMC 自定义背景时，请在“启用与范围”中关闭 Lite 音乐材质。")
     }
 }
 

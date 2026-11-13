@@ -58,3 +58,38 @@ Normal-notification material remains the only native sample recipe, explicitly
 identified in the caption. Missing OEM APIs still produce a labeled schematic
 preview rather than a claim of complete scene fidelity. Source and 80 host tests
 support this integration; they do not establish a visual device result.
+
+## Preview 6 usability review
+
+The review found three navigational failures: independent scene/category selectors
+could leave an unrelated preview above the setting, category-local search hid
+controls elsewhere, and inactive child parameters looked effective. Notification
+animation controls also shared one long group and the arbitrary first-six rule
+hid the distinctions between entry, exit and curve tuning.
+
+Keep the existing Miuix semantic palette: light page `#F7F7F7`, card `#FFFFFF`,
+primary `#3482FF`, dark page `#000000`, card `#242424`, primary `#277AF7`. Use
+system sans and the existing title/body/caption scale; left-align controls and
+reserve trailing space for values. Keep the fixed preview as the only visual
+focus. This is a system settings tool, so recognition and truthful state matter
+more than decorative novelty.
+
+```text
+Material and corners
+  Fixed sample + one-line renderer status
+  Optional sample controls (collapsed initially)
+  Scrollable: enabled ranges / presets / glass / geometry
+    Global material search
+    Category description and context
+    Named sections with dependency messages
+    Familiar-range sliders + single-step adjustment + numeric entry
+```
+
+The initial plan retained two equally prominent dropdowns. That repeated the
+existing ambiguity, so the revised layout starts at enabled ranges, labels the
+sample selector as preview-only, and makes each category's purpose explicit.
+Cross-category search is available from the same editor. Inactive child values
+remain stored but cannot misleadingly appear active; the missing parent switch
+is named beside them. Notification entry/exit and curve sections use stable keys,
+not title matching. Existing settings, export/import and hook ownership remain
+unchanged. Device visual acceptance remains separate from source verification.

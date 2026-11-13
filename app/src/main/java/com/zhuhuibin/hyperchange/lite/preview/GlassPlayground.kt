@@ -51,6 +51,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private var mainCard: SampleSurface? = null
     private var night = false
     private var materialComparison = false
+    private var captionConfigured = false
+    private var behavior = previewBehavior(preferences.all)
     private var expanded = false
     private var removed = false
     private var focusGroup = ""
@@ -117,7 +119,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         addView(wallpaper, LayoutParams(-1, -1))
         addView(content, LayoutParams(-1, -1).apply { bottomMargin = dp(35) })
         caption.apply {
-            textSize = 10f
+            textSize = 12f
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(3), dp(8), dp(3))
             setTextColor(Color.WHITE)
@@ -126,7 +128,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         addView(caption, LayoutParams(-1, dp(35), Gravity.BOTTOM))
         setOnClickListener { if (removed) replay() }
         content.setOnTouchListener { _, event ->
-            if (scene != Scene.VOLUME) false else {
+            if (scene != Scene.VOLUME || !behavior.volume) false else {
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         parent?.requestDisallowInterceptTouchEvent(true)
@@ -201,7 +203,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
 
     /** The material editor respects runtime scope and geometry switches. */
     fun setMaterialComparison(value: Boolean) {
-        if (materialComparison == value) return
+        if (materialComparison == value && captionConfigured) return
+        captionConfigured = true
         materialComparison = value
         val captionLines = if (value) 3 else 2
         val captionHeight = max(dp(if (value) 44 else 35),
@@ -242,6 +245,13 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
 
     fun refresh() {
         if (released) return
+        // Numeric animation inputs are captured when playback starts. Retire an
+        // old playback before applying a new configuration rather than resetting
+        // layout underneath an animator that still writes its previous values.
+        cancelAnimations()
+        behavior = previewBehavior(preferences.all)
+        removed = false
+        mainCard?.visibility = View.VISIBLE
         surfaces.forEach { it.updateMaterial() }
         layoutScene()
         updateCaption()
@@ -258,7 +268,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 layoutScene(animated = true)
             }
             Scene.VOLUME -> showVolume()
-            Scene.MEDIA -> mainCard?.let { card -> animatePress(card, 1f, 320, .72f, 9f) { animatePress(card, 0f, 420, .48f, 8f) } }
+            Scene.MEDIA -> if (behavior.mediaTilt) mainCard?.let { card -> animatePress(card, 1f, 320, .72f, 9f) { animatePress(card, 0f, 420, .48f, 8f) } }
             else -> {
                 surfaces.forEach { card ->
                     animate(450) { t ->
@@ -404,6 +414,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 val top = ((h - if (expanded) cardHeight * 3 + gap * 2 else cardHeight) / 2).coerceAtLeast(inset)
                 surfaces.forEachIndexed { i, card ->
                     val depth = 2 - i
+                    if (card !== mainCard) card.visibility = if (expanded || behavior.group) View.VISIBLE else View.INVISIBLE
                     val frame = NotificationMotion.group(depth, number("notification_group_stack_spacing", 6f), number("notification_group_stack_scale", .95f))
                     val y = if (expanded) top + depth * (cardHeight + gap) else top + dp(frame.offsetDp).roundToInt().coerceAtMost((h - top - cardHeight).coerceAtLeast(0))
                     place(card, margin, y, width, cardHeight, if (expanded) 1f else frame.scale)
@@ -427,9 +438,15 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             }
             Scene.VOLUME -> {
                 val x = w / 2 - dp(38)
-                val barWidth = dp(if (volumeScheduled) volumeWidth.value else number("volume_thin_width", 9f)).roundToInt().coerceIn(dp(4), dp(84))
-                val barHeight = dp(number("volume_height", 150f)).roundToInt().coerceAtLeast(dp(24)).coerceAtMost(availableHeight)
-                surfaces.getOrNull(0)?.let { place(it, x, (h - barHeight) / 2, barWidth, barHeight) }
+                val barWidth = dp(if (!behavior.volume) 52f else if (volumeScheduled) volumeWidth.value else number("volume_thin_width", 9f)).roundToInt().coerceIn(dp(4), dp(84))
+                val barHeight = dp(if (behavior.volume) number("volume_height", 150f) else 150f).roundToInt().coerceAtLeast(dp(24)).coerceAtMost(availableHeight)
+                surfaces.getOrNull(0)?.let {
+                    place(it, x, (h - barHeight) / 2, barWidth, barHeight)
+                    if (behavior.volume) {
+                        it.translationX = -number("volume_offset_x", 0f).toInt().toFloat()
+                        it.translationY = number("volume_offset_y", 0f).toInt().toFloat()
+                    }
+                }
                 val timerHeight = dp(68).coerceAtMost(availableHeight)
                 surfaces.getOrNull(1)?.let { place(it, x + dp(64), (h - timerHeight) / 2, (w - x - dp(84)).coerceAtLeast(dp(50)), timerHeight) }
             }
@@ -455,19 +472,19 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 pointerX = (event.x / card.width.coerceAtLeast(1)).coerceIn(0f, 1f)
                 pointerY = (event.y / card.height.coerceAtLeast(1)).coerceIn(0f, 1f)
                 parent?.requestDisallowInterceptTouchEvent(true)
-                animatePress(card, 1f, 320, .72f, 9f)
+                if (behavior.tiltFor(scene.name)) animatePress(card, 1f, 320, .72f, 9f)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 moved = moved || abs(event.x - downX) + abs(event.y - downY) > dp(8)
                 pointerX = (event.x / card.width.coerceAtLeast(1)).coerceIn(0f, 1f)
                 pointerY = (event.y / card.height.coerceAtLeast(1)).coerceIn(0f, 1f)
-                applyPress(card)
+                if (behavior.tiltFor(scene.name)) applyPress(card)
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
-                animatePress(card, 0f, 420, .48f, 8f)
+                if (behavior.tiltFor(scene.name)) animatePress(card, 0f, 420, .48f, 8f)
                 if (event.actionMasked == MotionEvent.ACTION_UP && !moved) card.performClick()
                 return true
             }
@@ -496,6 +513,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private fun playHeadsUp(exit: Boolean) {
         val card = mainCard ?: return
         cancelAnimations()
+        if (!behavior.headsUp) { card.visibility = View.VISIBLE; layoutScene(); return }
         val prefix = if (exit) "notification_heads_up_pop_exit" else "notification_heads_up_pop"
         fun duration(key: String, fallback: Float) = number(key, fallback).coerceIn(200f, 1500f).toLong()
         fun delay(key: String, fallback: Float): Long {
@@ -556,6 +574,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private fun playStack(exit: Boolean) {
         val card = mainCard ?: return
         cancelAnimations()
+        if (!behavior.stack) { card.visibility = View.VISIBLE; layoutScene(); return }
         val prefix = if (exit) "notification_stack_anim_remove" else "notification_stack_anim_add"
         val duration = number("${prefix}_duration", if (exit) 500f else 700f).toLong()
         val startScale = number("${prefix}_scale", .5f)
@@ -580,6 +599,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
 
     private fun showVolume() {
+        if (!behavior.volume) { layoutScene(); return }
         volumeWidth.snap(52f)
         // The source parameter is the initial scale, not an amount subtracted from 1.
         // popTransform maps progress 0..1 to the shared scale/negative-translation curve.
@@ -638,6 +658,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
 
     private fun cancelAnimations() {
+        parent?.requestDisallowInterceptTouchEvent(false)
         animations.toList().forEach { it.cancel() }
         animations.clear()
         handler.removeCallbacksAndMessages(null)
@@ -651,7 +672,12 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         volumeNudge.snap(0f)
         volumeDragX.snap(0f); volumeDragY.snap(0f)
         volumeDragScaleX.snap(1f); volumeDragScaleY.snap(1f)
-        surfaces.forEach { it.rotationX = 0f; it.rotationY = 0f; it.translationZ = 0f; it.translationX = 0f; it.translationY = 0f; it.setRenderEffect(null) }
+        surfaces.forEach {
+            it.rotationX = 0f; it.rotationY = 0f; it.translationZ = 0f
+            it.translationX = 0f; it.translationY = 0f
+            it.scaleX = 1f; it.scaleY = 1f; it.alpha = 1f
+            it.setRenderEffect(null)
+        }
     }
 
     private fun updateCaption() {
@@ -667,10 +693,12 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             else -> "示意预览，非原生材质"
         }
         val action = when (scene) {
-            Scene.NOTIFICATION -> if (focusGroup.contains("显隐")) "轻点查看显隐" else "轻点展开 · 按住拖动"
-            Scene.HEADS_UP -> "轻点重播弹出"
-            Scene.MEDIA -> "按住拖动"
-            Scene.VOLUME -> "按住拖动 · 松开回弹"
+            Scene.NOTIFICATION -> if (focusGroup.contains("显隐")) {
+                if (behavior.stack) "轻点查看出现与消失" else "通知出现与消失动画已关闭"
+            } else if (behavior.rowTilt) "轻点展开 · 按住查看倾斜" else "轻点展开；按压效果已关闭"
+            Scene.HEADS_UP -> if (behavior.headsUp) "轻点重播弹出" else "悬浮动画已关闭"
+            Scene.MEDIA -> if (behavior.mediaTilt) "按住查看倾斜" else "音乐按压效果已关闭"
+            Scene.VOLUME -> if (behavior.volume) "按住变宽 · 松开收窄" else "窄音量条已关闭，显示普通宽度"
             else -> "实时调参"
         }
         val state = currentMaterialState()

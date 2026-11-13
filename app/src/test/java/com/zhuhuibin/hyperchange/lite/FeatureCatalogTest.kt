@@ -2,8 +2,11 @@ package com.zhuhuibin.hyperchange.lite
 
 import com.zhuhuibin.hyperchange.lite.ui.Feature
 import com.zhuhuibin.hyperchange.lite.ui.MaterialCategory
+import com.zhuhuibin.hyperchange.lite.ui.settingDisabledReason
+import com.zhuhuibin.hyperchange.lite.ui.settingSectionTitle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,4 +59,50 @@ class FeatureCatalogTest {
         }
         assertEquals(MaterialCategory.SCOPES, MaterialCategory.ownerOrNull(LiteCatalog.entries.first { it.key == SettingsMigration.LOCKSCREEN_KEY }))
     }
+
+    @Test fun inactiveChildrenExplainTheirParentWithoutChangingStoredValues() {
+        val values = mutableMapOf<String, Any>("notification_press_tilt_enabled" to false,
+            "notification_press_tilt_scale" to .93f)
+        val scale = LiteCatalog.entries.first { it.key == "notification_press_tilt_scale" }
+        assertNotNull(settingDisabledReason(scale, values))
+        assertEquals(.93f, values[scale.key])
+        values["notification_press_tilt_enabled"] = true
+        assertNull(settingDisabledReason(scale, values))
+        LiteCatalog.entries.forEach { settingDisabledReason(it, emptyMap<String, Any>()) }
+    }
+
+    @Test fun curveEditorsFollowTheSelectedAnimationMode() {
+        val values = mutableMapOf<String, Any>("notification_heads_up_pop_enabled" to true,
+            "notification_heads_up_pop_spring" to false, "notification_heads_up_pop_exit_spring" to true)
+        fun reason(key: String) = settingDisabledReason(LiteCatalog.entries.first { it.key == key }, values)
+        assertNull(reason("notification_heads_up_pop_curve_x1"))
+        assertNotNull(reason("notification_heads_up_pop_damping"))
+        assertNotNull(reason("notification_heads_up_pop_exit_curve_x1"))
+        assertNull(reason("notification_heads_up_pop_exit_damping"))
+        values["notification_heads_up_pop_enabled"] = false
+        assertNotNull(reason("notification_heads_up_pop_curve_x1"))
+        assertNotNull(reason("notification_heads_up_pop_exit_spring"))
+    }
+
+    @Test fun independentMaterialRangesAndCornersDoNotRequireTheSystemTuningSwitch() {
+        val values = mapOf<String, Any>("glass_enabled" to false, "glass_assistant" to true,
+            "cc_radius_enabled" to true, "glass_shade" to false)
+        fun reason(key: String) = settingDisabledReason(LiteCatalog.entries.first { it.key == key }, values)
+        assertNull(reason("glass_refraction_blur"))
+        assertNull(reason("cc_card_radius"))
+        assertNull(reason("glass_unify_notifications"))
+        assertNotNull(reason("glass_background_blur"))
+        assertNull(settingDisabledReason(LiteCatalog.entries.first { it.key == "glass_background_blur" },
+            values + ("glass_enabled" to true)))
+    }
+
+    @Test fun headsUpAdvancedControlsHaveExplicitSectionsInsteadOfArbitraryTruncation() {
+        fun section(key: String) = settingSectionTitle(LiteCatalog.entries.first { it.key == key })
+        assertEquals(section("notification_heads_up_pop_enabled"), section("notification_heads_up_pop_exit_scale"))
+        assertEquals(section("notification_heads_up_pop_exit_spring"), section("notification_heads_up_pop_exit_curve_y2"))
+        assertEquals(section("notification_heads_up_pop_spring"), section("notification_heads_up_pop_curve_x1"))
+        assertEquals(section("notification_heads_up_pop_blur"), section("notification_heads_up_pop_flip"))
+        assertTrue(section("notification_heads_up_pop_enabled") != section("notification_heads_up_pop_curve_x1"))
+    }
+
 }

@@ -5,25 +5,41 @@ import com.zhuhuibin.hyperchange.lite.glass.softGlassParameters
 
 object GlassSettingsSpec {
     val entries: List<LiteSetting> = buildList {
-        add(LiteSetting.toggle("glass_enabled", "启用柔光调节", "柔光玻璃", summary = "使用系统原生材质与 HyperChanger 的相对调节方式"))
+        add(LiteSetting.toggle("glass_enabled", "启用系统材质调节", "柔光玻璃", summary = "调节下方已开启范围的系统玻璃；关闭后停止调参并保留数值。统一材质和独立范围另行控制"))
         add(LiteSetting.toggle("glass_notifications", "普通通知材质", "柔光范围", true,
-            summary = "独立于音乐卡片；锁屏上的普通通知还受“锁屏通知效果”限制"))
-        add(LiteSetting.toggle(SettingsMigration.MEDIA_KEY, "接管音乐卡片材质", "柔光范围",
-            summary = "仅通知区／锁屏音乐卡。允许柔光调参和统一配方；开启范围本身不会强制玻璃。使用 HMC 自定义音乐背景时请关闭"))
+            summary = "调节通知卡片；锁屏通知需另外开启“锁屏通知效果”"))
+        add(LiteSetting.toggle(SettingsMigration.MEDIA_KEY, "音乐卡片材质", "柔光范围",
+            summary = "调节通知栏和锁屏的播放器背景。使用 HMC 自定义播放器背景时关闭，避免两边同时修改"))
         add(LiteSetting.toggle("glass_control_center", "控制中心", "柔光范围", true))
         add(LiteSetting.toggle("glass_volume", "音量面板", "柔光范围", true))
         add(LiteSetting.toggle("glass_shade", "下拉背景", "柔光范围", true))
-        add(LiteSetting.toggle("glass_unify_notifications", "统一获准范围内的材质", "柔光范围", summary = "将焦点通知和音乐卡使用普通通知玻璃配方，独立于柔光调节总开关；仍受普通通知、音乐接管和锁屏范围限制，保留悬浮通知例外"))
-        add(LiteSetting.number("glass_refraction_blur", "玻璃采样模糊 %", "柔光玻璃", 100f, 0f, 200f))
-        add(LiteSetting.number("glass_background_blur", "背景模糊 %", "下拉背景", 100f, 0f, 200f))
-        add(LiteSetting.number("glass_background_scale", "背景采样缩放 %", "下拉背景", 100f, 0f, 200f))
-        add(LiteSetting.number("glass_background_opacity", "背景混色不透明度 %", "下拉背景", 100f, 0f, 200f))
+        add(LiteSetting.toggle("glass_unify_notifications", "统一通知与音乐材质", "柔光范围", summary = "让实时卡片和音乐卡采用普通通知的玻璃样式。独立于材质调节总开关，仍遵守各自的作用范围；不改变悬浮通知"))
+        add(LiteSetting.number("glass_refraction_blur", "玻璃模糊", "柔光玻璃", 100f, 0f, 200f, summary = "100% 保留系统值；向左更清晰，向右更模糊"))
+        add(LiteSetting.number("glass_background_blur", "背景模糊", "下拉背景", 100f, 0f, 200f, summary = "100% 保留系统背景模糊；向左更清晰，向右更模糊"))
+        add(LiteSetting.number("glass_background_scale", "背景采样比例", "下拉背景", 100f, 0f, 200f, summary = "100% 保留系统值；改变背景取样尺度"))
+        add(LiteSetting.number("glass_background_opacity", "背景色浓度", "下拉背景", 100f, 0f, 200f, summary = "100% 保留系统背景色；向左减淡，向右加浓"))
         softGlassParameters.forEach { p ->
-            add(LiteSetting.number("glass_${p.key}", p.title, "材质细调", if (p.key == "darker") -100f else 0f,
-                p.adjustmentRange.first.toFloat(), p.adjustmentRange.last.toFloat(), summary = "相对系统原始材质调节，0 保留原值"))
+            add(LiteSetting.number("glass_${p.key}", materialTitle(p.key, p.title), "材质细调", if (p.key == "darker") -100f else 0f,
+                p.adjustmentRange.first.toFloat(), p.adjustmentRange.last.toFloat(), summary = when (p.key) {
+                    "darker" -> "默认 −100% 去掉系统压暗；0% 恢复原值"
+                    "brightness", "background_brightness" -> "相对系统亮度配方增减，0% 保留原值；正值不一定更亮"
+                    "edge_feather" -> "正值让边缘更柔和，负值更锐利；0% 保留系统值"
+                    else -> "相对系统配方增减；0% 保留原值，建议先小幅调整"
+                }))
         }
-        add(LiteSetting.toggle("glass_assistant", "负一屏组件柔光", "负一屏与侧边栏", summary = "使用上面的材质参数，独立于系统界面总开关"))
-        add(LiteSetting.toggle("glass_sidebar", "侧边栏柔光", "负一屏与侧边栏", summary = "使用上面的材质参数，独立于系统界面总开关"))
-        add(LiteSetting.toggle("glass_sidebar_unify", "侧边栏卡片统一材质", "负一屏与侧边栏", summary = "将工具卡片和全部应用面板接入系统侧栏玻璃"))
+        add(LiteSetting.toggle("glass_assistant", "负一屏组件柔光", "负一屏与侧边栏", summary = "独立开关，共用折射和光影参数；背景模糊、采样比例与背景色保留组件原值"))
+        add(LiteSetting.toggle("glass_sidebar", "侧边栏柔光", "负一屏与侧边栏", summary = "独立开关，共用折射和光影参数；背景模糊、采样比例与背景色保留组件原值"))
+        add(LiteSetting.toggle("glass_sidebar_unify", "侧边栏卡片统一材质", "负一屏与侧边栏", summary = "将侧栏工具卡片和应用面板改用系统侧栏玻璃；独立于侧边栏柔光开关"))
+    }
+
+    private fun materialTitle(key: String, fallback: String) = when (key) {
+        "luminance" -> "明暗混合"
+        "brightness" -> "表面亮度混合"
+        "alpha" -> "玻璃不透明度"
+        "refraction" -> "折射强度"
+        "thickness" -> "玻璃厚度"
+        "background_brightness" -> "背景亮度混合"
+        "burn" -> "背景压色"
+        else -> fallback
     }
 }

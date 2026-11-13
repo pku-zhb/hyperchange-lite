@@ -24,6 +24,7 @@ import com.zhuhuibin.hyperchange.lite.SettingsMigration
 import com.zhuhuibin.hyperchange.lite.preview.GlassPlayground
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 
 /** One fixed preview; category navigation and every material parameter scroll below it. */
@@ -42,7 +43,7 @@ internal fun MaterialEditorPage(
     onEdit: (LiteSetting) -> Unit,
     preview: @Composable (height: Int) -> Unit,
 ) {
-    var query by rememberSaveable(category.name) { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     var listCategory by rememberSaveable { mutableStateOf(category.name) }
     val listState = rememberLazyListState()
     LaunchedEffect(category) {
@@ -51,14 +52,19 @@ internal fun MaterialEditorPage(
             listCategory = category.name
         }
     }
-    val sections = category.settings.filter { spec ->
-        query.isBlank() || listOf(spec.title, spec.summary, spec.group).any { it.contains(query.trim(), true) }
-    }.groupBy { it.group }
+    val searching = query.isNotBlank()
+    val sections = (if (searching) Feature.MATERIAL.settings else category.settings).filter { spec ->
+        !searching || listOf(spec.title, spec.summary, spec.group,
+            MaterialCategory.ownerOrNull(spec)?.title.orEmpty()).any { it.contains(query.trim(), true) }
+    }.groupBy { spec ->
+        if (searching) "${MaterialCategory.ownerOrNull(spec)?.title} · ${settingSectionTitle(spec)}"
+        else settingSectionTitle(spec)
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Keep room for controls on short landscape windows, without changing the
         // requested top position or nesting the preview inside the settings list.
-        val previewHeight = (maxHeight.value * .34f).coerceIn(100f, 250f).toInt()
+        val previewHeight = (maxHeight.value * .30f).coerceIn(80f, 230f).toInt()
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 preview(previewHeight)
@@ -72,13 +78,13 @@ internal fun MaterialEditorPage(
                 item("navigation") {
                     Card(Modifier.fillMaxWidth()) {
                         WindowDropdownPreference(
-                            title = "预览场景", items = GlassPlayground.Scene.entries.map { it.title },
+                            title = "预览位置（仅预览）", items = GlassPlayground.Scene.entries.map { it.title },
                             selectedIndex = scene, onSelectedIndexChange = onScene,
                         )
                         WindowDropdownPreference(
-                            title = "调节分类", items = MaterialCategory.entries.map { it.title },
+                            title = "调节项目", items = MaterialCategory.entries.map { it.title },
                             selectedIndex = category.ordinal,
-                            onSelectedIndexChange = { onCategory(MaterialCategory.entries[it]) },
+                            onSelectedIndexChange = { query = ""; onCategory(MaterialCategory.entries[it]) },
                         )
                     }
                 }
@@ -86,16 +92,18 @@ internal fun MaterialEditorPage(
                     Hint(if (connection == 2) "参数已保存在本地，模块同步失败；重新连接后继续同步。"
                         else "参数会保存在本地；连接模块服务后同步到系统。")
                 }
-                if (category == MaterialCategory.PRESETS) {
+                item("search") {
+                    TextField(
+                        value = query, onValueChange = { query = it }, label = "搜索全部材质与圆角设置",
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (searching) TextButton("清除搜索", { query = "" }, modifier = Modifier.fillMaxWidth())
+                    else Hint(category.summary + if (category == MaterialCategory.PRESETS) "" else "。点数值可直接输入，加减按钮用于微调。")
+                }
+                if (category == MaterialCategory.PRESETS && !searching) {
                     item("presets") { GlassPresetControls(values, hasUndo, onApply, onUndo) }
                 } else {
-                    item("search") {
-                        TextField(
-                            value = query, onValueChange = { query = it }, label = "搜索${category.title}",
-                            singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    if (sections.isEmpty()) item("empty") { Hint("没有找到相关设置，换一个关键词试试。") }
+                    if (sections.isEmpty()) item("empty") { Hint("没有找到相关设置。可搜索“通知”“模糊”或“圆角”。") }
                     sections.forEach { (group, specs) ->
                         item("${category.name}-$group") {
                             SettingSection(group, specs, values, searching = true, onWrite = onWrite, onEdit = onEdit)
@@ -103,9 +111,9 @@ internal fun MaterialEditorPage(
                     }
                     item("scope-hint") {
                         Hint(when (category) {
-                            MaterialCategory.SCOPES -> "锁屏通知效果同时约束通知材质与行为。预览仅在 App 内运行，不会启动或重载系统功能。"
-                            MaterialCategory.ASSISTANT -> "负一屏与侧边栏有独立开关，共用材质细调参数。可切换上方场景逐项对照。"
-                            else -> "开关关闭时保留数值；预览按当前场景的开关与作用范围显示。系统效果仍取决于作用域是否已加载。"
+                            MaterialCategory.SCOPES -> "与 HMC 共用时，请关闭 Lite 的锁屏普通通知效果；音乐使用 HMC 自定义背景时，也请关闭 Lite 音乐材质。"
+                            MaterialCategory.ASSISTANT -> "这两个位置不受“系统材质调节”开关控制。调节玻璃质感时，请在上方选对应的预览位置。"
+                            else -> "参数会自动保存。关闭效果会保留数值；预览只显示 App 内样例，系统效果以实际面板为准。"
                         })
                     }
                 }

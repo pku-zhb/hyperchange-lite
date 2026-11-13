@@ -6,9 +6,9 @@ import com.zhuhuibin.hyperchange.lite.LiteSetting
 
 /** Navigation owns presentation only; persisted setting names remain unchanged. */
 enum class Feature(val title: String, val summary: String) {
-    MATERIAL("材质编辑", "统一预览、预设、材质与圆角"),
-    NOTIFICATIONS("通知行为", "按压、悬浮、显隐与分组"),
-    VOLUME("音量行为", "长按展开、位置、尺寸与回弹");
+    MATERIAL("材质与圆角", "选择生效位置，调整玻璃质感与卡片圆角"),
+    NOTIFICATIONS("通知动画", "按压反馈、悬浮通知、增删动画与分组"),
+    VOLUME("音量面板", "长按展开、音量条尺寸与弹出动画");
 
     val settings: List<LiteSetting> get() = LiteCatalog.entries.filter { owner(it) == this }
 
