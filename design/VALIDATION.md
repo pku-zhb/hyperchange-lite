@@ -1,5 +1,28 @@
 # Host validation
 
+## 0.1.3 heads-up and whole-background isolation
+
+- The owner reproduced the unwanted foreground-App blur/dim, then confirmed that
+  disabling only **下拉背景** stopped it. This A/B result identifies the full
+  backdrop range; the exact radius/blend setter was not captured on the phone.
+- All 170 JVM tests in 30 suites passed with no failures, errors or skips;
+  `:app:lintDebug` and `git diff --check` passed. New checks cover actual panel
+  versus pinned heads-up state, unknown/AOD/locked inputs, per-root/kind ownership,
+  replacement/detach/stop/reopen, and native-cleanup versus stale replay dispatch.
+- The retained SystemUI/CC contracts were checked read-only, including exact
+  notification callback declarations in DEX. The window-expanded boolean includes
+  heads-up and is unsuitable for this boundary. The new scope requires real
+  positive panel expansion and confirmed unlocked/non-AOD state.
+- Background baselines now retire across scope epochs. Both ordinary and legacy
+  setter paths reject stale module replay, while native cleanup remains intact.
+  Prepared writes validate after OEM callbacks, preventing late cache recreation.
+- Android GPU output and the new loaded hook have not been accepted on the phone.
+  No GUI, screenshots, installation, device settings changes, scope reload or reboot
+  was used. The owner's diagnostic A/B is separate from APK acceptance.
+- See [shade background scope](SHADE_BACKGROUND_SCOPE.md) for evidence, ownership
+  decisions and the short owner-operated tests. Final packaging and retained APK
+  identity are verified by the committed-source archive workflow.
+
 ## 0.1.2 editor, volume and reference review
 
 - All 156 JVM tests in 28 suites passed, with no failures, errors or skips.

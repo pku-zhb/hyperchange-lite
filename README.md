@@ -4,6 +4,12 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.3 isolates whole-background tuning from heads-up banners and retires
+closed-panel background snapshots. It requires a real expanded panel in a
+confirmed unlocked/non-AOD scene; unknown/locked scenes retain native backgrounds.
+See [shade ownership](design/SHADE_BACKGROUND_SCOPE.md) for the confirmed input
+path, retained OEM contracts and owner-operated acceptance.
+
 Version 0.1.2 adds single-tap scrollable editor tabs and corrects the borrowed
 first-show/repeated-key volume behavior. The visible volume track has an explicit
 physical-pixel edge gap (6 px by default; 0 is flush). Existing package, signing
