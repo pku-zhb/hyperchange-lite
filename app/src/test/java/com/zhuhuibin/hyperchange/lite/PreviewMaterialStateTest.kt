@@ -4,7 +4,6 @@ import com.zhuhuibin.hyperchange.lite.glass.SoftGlassSettings
 import com.zhuhuibin.hyperchange.lite.preview.previewMaterialState
 import com.zhuhuibin.hyperchange.lite.preview.previewRadius
 import com.zhuhuibin.hyperchange.lite.preview.previewSamplingInputs
-import com.zhuhuibin.hyperchange.lite.preview.previewExtraZoom
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -14,12 +13,10 @@ class PreviewMaterialStateTest {
         adjustments = mapOf("refraction" to 50),
     )
 
-    @Test fun fallbackZoomHasTheSameDirectionAndZeroMeaningAsTheNativeInput() {
-        assertEquals(1f, previewExtraZoom(0), 0f)
-        assertEquals(1.075f, previewExtraZoom(100), .00001f)
-        assertEquals(1.15f, previewExtraZoom(200), .00001f)
-        assertEquals(previewExtraZoom(0), previewExtraZoom(-100), 0f)
-        assertEquals(previewExtraZoom(200), previewExtraZoom(1000), 0f)
+    @Test fun nativeSamplingRatioKeepsTheOemBaselineWithoutInventingImageZoom() {
+        assertEquals(0f, previewSamplingInputs(saved.copy(backgroundScale = 0), false).backgroundScale, 0f)
+        assertEquals(.075f, previewSamplingInputs(saved.copy(backgroundScale = 100), false).backgroundScale, .00001f)
+        assertEquals(.15f, previewSamplingInputs(saved.copy(backgroundScale = 200), false).backgroundScale, .00001f)
     }
 
     @Test fun eachSystemSceneHonorsItsOwnMaterialRange() {

@@ -5,12 +5,12 @@ import com.zhuhuibin.hyperchange.lite.LiteCatalog
 import com.zhuhuibin.hyperchange.lite.LiteSetting
 
 /** Presentation dependencies only; the runtime policies remain the authority. */
-internal fun settingDisabledReason(spec: LiteSetting, values: Map<String, *>): String? {
+internal fun settingDisabledReason(spec: LiteSetting, values: Map<String, *>, translate: (String) -> String = { it }): String? {
     fun enabled(key: String): Boolean = values[key] as? Boolean
         ?: LiteCatalog.entries.first { it.key == key }.defaultValue as Boolean
     fun require(key: String, expected: Boolean = true): String? = if (enabled(key) == expected) null else {
         val title = LiteCatalog.entries.first { it.key == key }.title
-        "先${if (expected) "开启" else "关闭"}“$title”后调节；原数值会保留。"
+        translate(if (expected) "需先开启“%s”（原数值已保留）" else "需先关闭“%s”（原数值已保留）").replace("%s", translate(title))
     }
     val key = spec.key
     return when {
@@ -35,7 +35,7 @@ internal fun settingDisabledReason(spec: LiteSetting, values: Map<String, *>): S
         key in cardBackgroundKeys -> require("glass_enabled")
         key.startsWith("glass_") && !spec.isToggle -> if (
             enabled("glass_enabled") || enabled("glass_assistant") || enabled("glass_sidebar")
-        ) null else "先开启系统材质调节、负一屏或侧边栏调节；原数值会保留。"
+        ) null else translate("请先开启卡片、负一屏或侧边栏材质调节，原数值已保留。")
         else -> null
     }
 }

@@ -27,7 +27,7 @@ class FeatureCatalogTest {
         assertFalse(Feature.NOTIFICATIONS.visibleSettings.any { it.key in deferred })
         assertFalse(Feature.NOTIFICATIONS.visibleSettings.any { it.group == "通知分组" })
         assertFalse(Feature.SCOPES.visibleSettings.any { it.key == "glass_shade" })
-        assertTrue(Feature.SCOPES.visibleSettings.any { it.key == "glass_shade_enabled" })
+        assertTrue(Feature.BACKDROP.visibleSettings.any { it.key == "glass_shade_enabled" })
     }
 
     @Test(expected = IllegalStateException::class)
@@ -38,16 +38,20 @@ class FeatureCatalogTest {
     @Test fun materialParametersHaveOneEditorDestination() {
         val editorSettings = MaterialCategory.entries.flatMap { it.settings }
         val materialKeys = editorSettings.map { it.key }
-        val destinations = listOf(Feature.SCOPES, Feature.MATERIAL, Feature.CORNERS).flatMap { it.settings }
+        val destinations = listOf(Feature.SCOPES, Feature.MATERIAL, Feature.BACKDROP, Feature.CORNERS).flatMap { it.settings }
         assertEquals(destinations.map { it.key }.toSet(), materialKeys.toSet())
         assertEquals(materialKeys.distinct().size, materialKeys.size)
         assertTrue(MaterialCategory.entries.filter { it != MaterialCategory.PRESETS }.all { it.settings.isNotEmpty() })
         assertTrue(LiteCatalog.entries.filter { it.key.startsWith("glass_") }.all {
-            Feature.owner(it) == if (it.isToggle) Feature.SCOPES else Feature.MATERIAL
+            Feature.owner(it) == when {
+                it.key.startsWith("glass_shade_") -> Feature.BACKDROP
+                it.isToggle -> Feature.SCOPES
+                else -> Feature.MATERIAL
+            }
         })
-        assertEquals(listOf("启用与范围", "材质", "圆角", "通知动画", "音量面板"), Feature.entries.map { it.title })
+        assertEquals(listOf("启用与范围", "卡片材质", "下拉背景", "圆角", "通知动画", "音量面板"), Feature.entries.map { it.title })
         assertEquals(listOf(MaterialCategory.SCOPES), Feature.SCOPES.categories)
-        assertEquals(listOf(MaterialCategory.SURFACE, MaterialCategory.BACKGROUND, MaterialCategory.SHADE, MaterialCategory.PRESETS),
+        assertEquals(listOf(MaterialCategory.SURFACE, MaterialCategory.BACKGROUND, MaterialCategory.PRESETS),
             Feature.MATERIAL.categories)
         assertEquals(listOf(MaterialCategory.NOTIFICATION, MaterialCategory.CONTROL, MaterialCategory.VOLUME), Feature.CORNERS.categories)
         assertTrue(Feature.SCOPES.settings.all { it.isToggle })
@@ -125,16 +129,18 @@ class FeatureCatalogTest {
         assertTrue(list.isNotEmpty())
         assertEquals(setOf("顶部横幅动画"), banner.map { it.group }.toSet())
         assertEquals(setOf("通知列表动画"), list.map { it.group }.toSet())
-        assertEquals("顶部横幅动画", banner.first { it.key == "notification_heads_up_pop_enabled" }.title)
-        assertEquals("通知列表动画", list.first { it.key == "notification_stack_anim_enabled" }.title)
+        assertEquals("自定义顶部横幅动画", banner.first { it.key == "notification_heads_up_pop_enabled" }.title)
+        assertEquals("通知出现与消失动画", list.first { it.key == "notification_stack_anim_enabled" }.title)
         assertTrue(banner.any { it.key == "notification_heads_up_pop_exit_curve_y2" })
     }
 
     @Test fun cardAndWholeBackgroundParametersNeverShareAnEditorCategory() {
         val card = MaterialCategory.BACKGROUND.settings
-        val whole = MaterialCategory.SHADE.settings
+        val whole = MaterialCategory.SHADE.settings.filter { !it.isToggle && it.key !in DeferredSettings.hiddenKeys }
         assertEquals(3, card.size)
-        assertEquals(3, whole.size)
+        assertEquals(setOf("glass_shade_blur", "glass_shade_opacity"), whole.map { it.key }.toSet())
+        assertEquals(MaterialCategory.SHADE,
+            MaterialCategory.ownerOrNull(LiteCatalog.entries.first { it.key == "glass_shade_enabled" }))
         card.forEach { assertEquals(MaterialCategory.BACKGROUND, MaterialCategory.ownerOrNull(it)) }
         whole.forEach { assertEquals(MaterialCategory.SHADE, MaterialCategory.ownerOrNull(it)) }
         val enabled = mapOf("glass_enabled" to true, "glass_shade_enabled" to false)

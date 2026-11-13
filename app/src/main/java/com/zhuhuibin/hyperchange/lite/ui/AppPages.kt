@@ -85,17 +85,17 @@ internal fun SettingsPage(
     Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Card(Modifier.fillMaxWidth()) {
-            WindowDropdownPreference(title = uiText("主题"), items = themeNames,
+            WindowDropdownPreference(title = uiText("界面主题"), summary = uiText("仅改变本设置应用的外观"), items = themeNames,
                 selectedIndex = themeMode.coerceIn(0, 2), insideMargin = compactPreferenceMargin,
                 onSelectedIndexChange = onThemeMode)
-            WindowDropdownPreference(title = uiText("语言"), items = languageNames,
+            WindowDropdownPreference(title = uiText("界面语言"), items = languageNames,
                 selectedIndex = languages.indexOf(language).coerceAtLeast(0), insideMargin = compactPreferenceMargin,
                 onSelectedIndexChange = { onLanguage(languages[it]) })
         }
         Card(Modifier.fillMaxWidth()) {
-            ArrowPreference(uiText("导出配置"), insideMargin = compactPreferenceMargin, onClick = onExport)
-            ArrowPreference(uiText("导入配置"), insideMargin = compactPreferenceMargin, onClick = onImport)
-            ArrowPreference(uiText("恢复默认"), insideMargin = compactPreferenceMargin, onClick = onReset)
+            ArrowPreference(uiText("导出全部设置"), summary = uiText("保存所有参数、开关和应用界面设置为 JSON 文件"), insideMargin = compactPreferenceMargin, onClick = onExport)
+            ArrowPreference(uiText("从文件恢复设置"), summary = uiText("用文件中的设置覆盖对应项目"), insideMargin = compactPreferenceMargin, onClick = onImport)
+            ArrowPreference(uiText("恢复全部默认"), summary = uiText("所有功能开关与参数恢复默认值"), insideMargin = compactPreferenceMargin, onClick = onReset)
         }
     }
 }

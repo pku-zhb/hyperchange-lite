@@ -18,14 +18,17 @@ internal fun GlassPresetControls(values: Map<String, *>, hasUndo: Boolean, onApp
         } == true
     } }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        EditorNote(uiText("预设会开启卡片材质调节，替换玻璃与卡片背景参数；不改下拉背景和作用范围。"))
         Card(Modifier.fillMaxWidth()) {
             builtInGlassPresets.forEach { preset ->
                 ArrowPreference(uiText(preset.title) + if (preset.id == current?.id) " ✓" else "",
-                    insideMargin = compactPreferenceMargin, onClick = { onApply(preset) })
+                    summary = uiText(preset.description), insideMargin = compactPreferenceMargin, onClick = { onApply(preset) })
             }
         }
         if (hasUndo) Card(Modifier.fillMaxWidth()) {
-            ArrowPreference(uiText("还原试用前材质"), insideMargin = compactPreferenceMargin, onClick = onUndo)
+            ArrowPreference(uiText("还原套用预设前的参数"),
+                summary = uiText("撤销本轮连续点选预设的改动，不改下拉背景和作用范围。"),
+                insideMargin = compactPreferenceMargin, onClick = onUndo)
         }
     }
 }

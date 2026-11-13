@@ -71,9 +71,6 @@ internal fun previewMaterialState(
     return PreviewMaterialState(settings, status, note)
 }
 
-/** Schematic fallback follows the OEM extra-zoom direction, using the local sample baseline. */
-internal fun previewExtraZoom(percent: Int): Float = 1f + softGlassScale(.075f, percent)
-
 internal data class PreviewSamplingInputs(
     val backgroundBlur: Int, val backgroundScale: Float, val opacity: Int,
     val smallRefractionBlur: Int?, val bigRefractionBlur: Int?,

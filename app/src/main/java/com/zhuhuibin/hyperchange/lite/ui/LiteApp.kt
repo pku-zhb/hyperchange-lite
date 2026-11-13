@@ -4,6 +4,7 @@ package com.zhuhuibin.hyperchange.lite.ui
 import android.net.Uri
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -99,7 +101,8 @@ fun LiteApp(
                 feature != null -> pageStates.SaveableStateProvider(feature.name) {
                     FeaturePage(feature, repository, revision, values, ::writeSetting, { editKey = it.key },
                         lastEditKey, editSequence,
-                        onApplyGlassPreset, onRestoreGlassPreset, wallpaperUri, wallpaperStyle, night, body)
+                        onApplyGlassPreset, onRestoreGlassPreset, wallpaperUri, wallpaperStyle,
+                        onChooseImage, onWallpaperStyle, night, body)
                 }
                 page == "settings" -> SettingsPage(themeMode, language, onThemeMode, onLanguage,
                     onExport, onImport, { resetDialog = true }, body)
@@ -107,14 +110,18 @@ fun LiteApp(
                 else -> Column(body.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Card(Modifier.fillMaxWidth()) {
                         BasicComponent(insideMargin = compactPreferenceMargin, title = uiText(when {
-                            repository.syncFailed -> "同步失败"
-                            repository.connected -> "已连接"
-                            else -> "未连接"
+                            repository.syncFailed -> "暂存于本机，待同步"
+                            repository.connected -> "已连接到系统界面"
+                            else -> "模块未连接"
+                        }), summary = uiText(when {
+                            repository.syncFailed -> "本机修改已保留；系统界面恢复连接后会自动同步。"
+                            repository.connected -> "参数实时同步；部分尺寸与圆角需重开面板生效。"
+                            else -> "请在 LSPosed 启用模块，勾选系统界面并重启一次系统界面。"
                         }))
                     }
                     Card(Modifier.fillMaxWidth()) {
                         Feature.entries.forEach { target ->
-                            ArrowPreference(uiText(target.title), insideMargin = compactPreferenceMargin, onClick = { page = target.name })
+                            ArrowPreference(uiText(target.title), summary = uiText(target.summary), insideMargin = compactPreferenceMargin, onClick = { page = target.name })
                         }
                     }
                 }
@@ -140,7 +147,8 @@ private fun FeaturePage(
     onWrite: (LiteSetting, Any) -> Unit, onEdit: (LiteSetting) -> Unit,
     lastEditKey: String?, editSequence: Int,
     onApply: (GlassPreset) -> Unit, onUndo: () -> Unit,
-    wallpaperUri: String?, wallpaperStyle: Int, night: Boolean, modifier: Modifier,
+    wallpaperUri: String?, wallpaperStyle: Int,
+    onChooseImage: () -> Unit, onWallpaperStyle: (Int) -> Unit, night: Boolean, modifier: Modifier,
 ) {
     val categories = feature.categories
     val projects = if (categories.isNotEmpty()) categories.map { it.name to it.title }
@@ -176,6 +184,7 @@ private fun FeaturePage(
         Column(Modifier.fillMaxSize()) {
             if (feature != Feature.SCOPES) PreviewPanel(
                 repository, revision, target, night, wallpaperUri, wallpaperStyle, previewHeight,
+                onChooseImage, onWallpaperStyle,
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp))
             if (projects.size > 1) ProjectTabs(projects.map { uiText(it.second) }, index, { selected ->
                 if (selected != index) {
@@ -191,24 +200,61 @@ private fun FeaturePage(
                 if (category == MaterialCategory.PRESETS) item("presets") {
                     GlassPresetControls(values, repository.hasGlassPresetUndo, onApply, onUndo)
                 } else {
-                    specs.forEach { spec ->
-                        item("setting:${spec.key}") {
-                            Card(Modifier.fillMaxWidth()) {
-                                val reason = settingDisabledReason(spec, values)
-                                if (spec.isToggle) SwitchPreference(
-                                    title = settingDisplayTitle(spec, uiText(spec.title), uiText("（注意兼容）")),
-                                    insideMargin = compactPreferenceMargin,
-                                    checked = values[spec.key] as? Boolean ?: spec.defaultValue as Boolean,
-                                    enabled = reason == null,
-                                    onCheckedChange = { if (reason == null) write(spec, it) },
-                                ) else NumberSetting(spec, number(values, spec), reason, ::write) { edit(spec) }
-                            }
+                    editorItems(category, specs).forEachIndexed { index, entry ->
+                        item("editor:$index") {
+                            EditorControl(entry, values, ::write, ::edit)
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun EditorControl(item: EditorItem, values: Map<String, *>, onWrite: (LiteSetting, Any) -> Unit, onEdit: (LiteSetting) -> Unit) {
+    when (item) {
+        is EditorItem.Setting -> {
+            val spec = LiteCatalog.entries.first { it.key == item.key }
+            val context = LocalContext.current
+            val reason = settingDisabledReason(spec, values) { localizedText(context, it) }
+            Card(Modifier.fillMaxWidth()) {
+                if (spec.isToggle) SwitchPreference(
+                    title = uiText(spec.title), summary = reason ?: uiText(spec.summary),
+                    insideMargin = compactPreferenceMargin,
+                    checked = values[spec.key] as? Boolean ?: spec.defaultValue as Boolean,
+                    enabled = reason == null,
+                    onCheckedChange = { if (reason == null) onWrite(spec, it) },
+                ) else NumberSetting(spec, number(values, spec), reason, onWrite) { onEdit(spec) }
+            }
+        }
+        is EditorItem.Note -> EditorNote(uiText(item.text))
+        is EditorItem.Group -> {
+            var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
+            AnimatedVisibility(editorGateOpen(item, values)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (item.collapsible) Card(Modifier.fillMaxWidth()) {
+                        BasicComponent(title = uiText(item.title), insideMargin = compactPreferenceMargin,
+                            onClick = { expanded = !expanded }, endActions = {
+                                Icon(MiuixIcons.Basic.ArrowRight, uiText(if (expanded) "收起进阶参数" else "展开进阶参数"),
+                                    Modifier.size(18.dp).graphicsLayer { rotationZ = if (expanded) 270f else 90f })
+                            })
+                    } else if (item.title.isNotBlank()) SmallTitle(uiText(item.title))
+                    AnimatedVisibility(!item.collapsible || expanded) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            item.children.forEach { child -> key(child) { EditorControl(child, values, onWrite, onEdit) } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun EditorNote(text: String) {
+    Text(text, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 }
 
 @Composable
@@ -252,9 +298,10 @@ private fun NumberSetting(spec: LiteSetting, value: Float, reason: String?, onWr
         if (!enabled) dragging = false
         if (!dragging) draft = value
     }
-    BasicComponent(title = settingDisplayTitle(spec, title, uiText("（注意兼容）")), enabled = enabled,
+    val modified = kotlin.math.abs(value - (spec.defaultValue as Number).toFloat()) > spec.step * .01f
+    BasicComponent(title = title, summary = reason ?: uiText(spec.summary), enabled = enabled,
         insideMargin = PaddingValues(start = 16.dp, end = 8.dp), endActions = {
-        TextButton(display(draft), onEdit, enabled = enabled, minWidth = 44.dp, minHeight = 44.dp,
+        TextButton((if (modified) "• " else "") + display(draft), onEdit, enabled = enabled, minWidth = 44.dp, minHeight = 44.dp,
             insideMargin = PaddingValues(horizontal = 8.dp),
             modifier = Modifier.semantics { contentDescription = "$title, ${display(draft)}, $inputLabel" })
     })
@@ -278,8 +325,9 @@ private fun NumberSetting(spec: LiteSetting, value: Float, reason: String?, onWr
             minWidth = 44.dp, minHeight = 44.dp, insideMargin = PaddingValues(0.dp),
             modifier = Modifier.semantics { contentDescription = "$increaseLabel $title" })
     }
-    if (outside) TextButton(uiText("移到常用范围"), { change(draft.coerceIn(range.start, range.endInclusive)) },
-        enabled = enabled, modifier = Modifier.fillMaxWidth(), minHeight = 44.dp)
+    if (outside) TextButton(String.format(uiText("超出常用区间 %s–%s，点此移回"), display(range.start), display(range.endInclusive)),
+        { change(draft.coerceIn(range.start, range.endInclusive)) }, enabled = enabled,
+        modifier = Modifier.fillMaxWidth(), minHeight = 44.dp)
 }
 
 @Composable
@@ -287,7 +335,10 @@ private fun NumberDialog(spec: LiteSetting, value: Float, dismiss: () -> Unit, s
     var text by rememberSaveable(spec.key) { mutableStateOf(format(value)) }
     var error by remember { mutableStateOf(false) }
     WindowDialog(show = true, title = uiText(spec.title),
-        summary = "${format(spec.min)} ～ ${format(spec.max)} ${spec.valueUnit}", onDismissRequest = dismiss) {
+        summary = String.format(uiText("默认 %s · 滑条 %s–%s · 允许 %s–%s"),
+            format((spec.defaultValue as Number).toFloat()) + spec.valueUnit,
+            format(spec.sliderRange.start) + spec.valueUnit, format(spec.sliderRange.endInclusive) + spec.valueUnit,
+            format(spec.min) + spec.valueUnit, format(spec.max) + spec.valueUnit), onDismissRequest = dismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             TextField(text, { text = it; error = false }, label = uiText("数值"), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = if (spec.min < 0f) KeyboardType.Text else KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
@@ -307,7 +358,8 @@ private fun NumberDialog(spec: LiteSetting, value: Float, dismiss: () -> Unit, s
 
 @Composable
 private fun PreviewPanel(repository: SettingsRepository, revision: Int, target: SettingPreviewTarget,
-                         night: Boolean, wallpaperUri: String?, wallpaperStyle: Int, height: Int, modifier: Modifier) {
+                         night: Boolean, wallpaperUri: String?, wallpaperStyle: Int, height: Int,
+                         onChooseImage: () -> Unit, onWallpaperStyle: (Int) -> Unit, modifier: Modifier) {
     class Applied {
         var target: SettingPreviewTarget? = null
         var revision = -1
@@ -316,7 +368,8 @@ private fun PreviewPanel(repository: SettingsRepository, revision: Int, target: 
         var style = -1
     }
     val applied = remember { Applied() }
-    AndroidView(factory = { GlassPlayground(it, repository.preferences) }, modifier = modifier.height(height.dp),
+    Box(modifier.height(height.dp)) {
+    AndroidView(factory = { GlassPlayground(it, repository.preferences) }, modifier = Modifier.fillMaxSize(),
         onReset = null, onRelease = { it.release() }, update = { view ->
             view.setRenderOnly(true)
             view.setMaterialComparison(true)
@@ -337,6 +390,15 @@ private fun PreviewPanel(repository: SettingsRepository, revision: Int, target: 
             if (refreshed) { view.refresh(); applied.revision = revision }
             if (changed || refreshed) view.previewFocusedEffect()
         })
+        Row(Modifier.align(Alignment.TopEnd).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconButton(onClick = { onWallpaperStyle(if (wallpaperUri != null) 0 else (wallpaperStyle + 1) % 4) }) {
+                Icon(PreviewIcons.palette, uiText("切换预览底图"), Modifier.size(20.dp))
+            }
+            IconButton(onClick = onChooseImage) {
+                Icon(PreviewIcons.image, uiText("选择预览图片"), Modifier.size(20.dp))
+            }
+        }
+    }
 }
 
 private fun number(values: Map<String, *>, spec: LiteSetting) =

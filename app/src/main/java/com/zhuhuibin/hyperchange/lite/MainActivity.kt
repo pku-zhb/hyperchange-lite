@@ -110,9 +110,9 @@ class MainActivity : ComponentActivity() {
                         .onFailure { reportSettingsFailure("保存", it) }
                 } },
                 onExport = {
-                    val appearance = AppUiPreferences.load(this)
                     io.execute {
                         val result = runCatching {
+                            val appearance = AppUiPreferences.load(applicationContext)
                             JSONObject(repository.exportJson()).put("appUi", AppUiSettingsCodec.encode(appearance)).toString(2)
                         }
                         runOnUiThread {

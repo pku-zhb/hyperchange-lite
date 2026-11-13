@@ -54,6 +54,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private val caption = TextView(context)
     private val material = NativePreviewMaterial(context)
     private val surfaces = mutableListOf<SampleSurface>()
+    private var shadePreview: ShadeBackdropPreview? = null
     private val animations = mutableListOf<ValueAnimator>()
     private val handler = Handler(Looper.getMainLooper())
     private var mainCard: SampleSurface? = null
@@ -221,7 +222,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         material.setNight(value)
         wallpaper.night = value
         wallpaper.invalidate()
-        if (surfaces.isNotEmpty()) buildScene()
+        if (surfaces.isNotEmpty()) buildScene() else if (shadePreview != null) updateCaption()
     }
 
     /** The material editor respects runtime scope and geometry switches. */
@@ -233,7 +234,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         refresh()
     }
 
-    /** The pinned area contains only the sample; metadata stays in accessibility. */
+    /** The pinned area keeps a short action hint; diagnostic metadata stays in accessibility. */
     fun setRenderOnly(value: Boolean) {
         if (renderOnly == value) return
         renderOnly = value
@@ -242,12 +243,14 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
 
     private fun updateCaptionLayout() {
-        val lines = if (materialComparison) 3 else 2
-        val height = if (renderOnly) 0 else max(dp(if (materialComparison) 44 else 35),
+        val lines = if (renderOnly) 2 else if (materialComparison) 3 else 2
+        val height = max(dp(if (renderOnly) 30 else if (materialComparison) 44 else 35),
             kotlin.math.ceil(caption.paint.fontSpacing * lines).toInt() + caption.paddingTop + caption.paddingBottom)
-        caption.visibility = if (renderOnly) View.GONE else View.VISIBLE
+        caption.visibility = View.VISIBLE
+        caption.maxLines = lines
+        caption.ellipsize = android.text.TextUtils.TruncateAt.END
         caption.layoutParams = LayoutParams(-1, height, Gravity.BOTTOM)
-        content.layoutParams = LayoutParams(-1, -1).apply { bottomMargin = height }
+        content.layoutParams = LayoutParams(-1, -1).apply { bottomMargin = if (renderOnly) 0 else height }
     }
 
     fun setFocusedSetting(key: String) {
@@ -326,6 +329,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         imageGeneration++
         wallpaper.setImage(null)
         wallpaper.style = style
+        shadePreview?.setBackdrop(null, style)
         wallpaper.invalidate()
     }
 
@@ -344,7 +348,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             post {
                 val image = result.getOrNull()
                 if (!released && generation == imageGeneration) {
-                    if (image != null) { wallpaper.setImage(image); refresh() }
+                    if (image != null) { wallpaper.setImage(image); shadePreview?.setBackdrop(image, wallpaper.style); refresh() }
                     else Toast.makeText(context, sampleText(result.exceptionOrNull()?.message ?: "无法读取图片"), Toast.LENGTH_SHORT).show()
                 } else image?.recycle()
             }
@@ -398,6 +402,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         content.removeAllViews()
         surfaces.clear()
         mainCard = null
+        shadePreview = null
         volumeArtwork = null
         when (scene) {
             Scene.NOTIFICATION -> {
@@ -455,7 +460,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 addCard("侧边工具箱", "截图    录屏    小窗\n\n        ▣        ◉        ▤", "⋮", false)
             }
             Scene.SHADE -> {
-                addCard("下拉背景", "今天的通知", "☷", false).radiusKey = ""
+                shadePreview = ShadeBackdropPreview(context).also {
+                    it.setBackdrop(wallpaper.currentImage, wallpaper.style)
+                    content.addView(it, LayoutParams(-1, -1))
+                }
             }
         }
         post { if (!released) { layoutScene(); refresh() } }
@@ -637,7 +645,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 val height = dp(132).coerceAtMost(availableHeight)
                 place(it, margin, (h - height) / 2, width, height)
             }
-            Scene.SHADE -> surfaces.firstOrNull()?.let { place(it, margin, inset, width, availableHeight) }
+            Scene.SHADE -> shadePreview?.let { it.layout(0, 0, content.width, content.height) }
         }
         updateCaption()
     }
@@ -885,6 +893,15 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     }
 
     private fun updateCaption() {
+        if (scene == Scene.SHADE) {
+            val state = currentMaterialState().settings
+            shadePreview?.update(state.enabled, state.backgroundBlur, state.backgroundOpacity, night)
+            wallpaper.setSamplingFallback(false, 100, 100)
+            nativeMaterialActive = false
+            contentDescription = sampleText("示意预览，系统材质以实际面板为准")
+            caption.text = sampleText("只调整后方背景，前方卡片保持不变")
+            return
+        }
         val visible = surfaces.filter { it.visibility == View.VISIBLE }
         val ready = visible.isNotEmpty() && visible.all { it.width > 0 && it.height > 0 }
         val native = visible.all { it.nativeApplied }
@@ -902,6 +919,16 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             wallpaper.setSamplingFallback(scene == Scene.SHADE && ready && !native,
                 if (state.settings.enabled) state.settings.backgroundBlur else 100,
                 if (state.settings.enabled) state.settings.backgroundScale else 100)
+            caption.text = sampleText(when {
+                focusGroup in setOf("卡片材质", "材质与预设", "玻璃质感", "卡片背景", "卡片预设") || focusedSetting.startsWith("glass_") ->
+                    "实时预览，实际质感以系统面板为准"
+                scene == Scene.VOLUME && behavior.volume -> "连按图标试收窄，按住试变宽"
+                scene == Scene.VOLUME -> "音量条样例"
+                scene == Scene.HEADS_UP -> "轻点卡片重播出现与收起"
+                scene == Scene.NOTIFICATION && listAnimationFocus() -> "轻点卡片查看出现与消失"
+                scene == Scene.NOTIFICATION || scene == Scene.MEDIA -> "按住卡片查看按压效果"
+                else -> "实时预览，实际质感以系统面板为准"
+            })
             return
         }
         val materialLabel = when {
@@ -1069,7 +1096,8 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private class WallpaperView(context: Context) : View(context) {
         var night = false
         var style = 0
-        private var image: Bitmap? = null
+        var currentImage: Bitmap? = null
+            private set
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private val matrix = Matrix()
         private var fallbackSampling = false
@@ -1082,14 +1110,12 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             setRenderEffect(if (radius > .1f) RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP) else null)
             invalidate()
         }
-        fun setImage(value: Bitmap?) { image = value; invalidate() }
+        fun setImage(value: Bitmap?) { currentImage = value; invalidate() }
         override fun onDraw(canvas: Canvas) {
             val save = canvas.save()
-            if (fallbackSampling) {
-                val zoom = previewExtraZoom(fallbackScale)
-                canvas.scale(zoom, zoom, width * .5f, height * .5f)
-            }
-            val bitmap = image
+            // OEM background-scale ratio is not image zoom. A local fallback must
+            // not enlarge the artwork to suggest a relationship the API does not promise.
+            val bitmap = currentImage
             if (bitmap != null && !bitmap.isRecycled) {
                 val scale = max(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
                 matrix.reset(); matrix.setScale(scale, scale)
