@@ -13,7 +13,7 @@ data class GlassPreset(
     val values: Map<String, Any>,
 )
 
-/** The only settings a material preset may change or restore during an A/B trial. */
+/** Card material only: whole-window sampling and scope switches never enter a trial. */
 val glassPresetKeys: Set<String> = buildSet {
     add("glass_enabled")
     add("glass_refraction_blur")

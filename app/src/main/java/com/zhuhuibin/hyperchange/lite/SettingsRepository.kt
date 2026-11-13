@@ -53,7 +53,7 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
                             val candidate = restored[spec.key] ?: spec.defaultValue
                             put(edit, spec, runCatching { spec.validate(candidate) }.getOrDefault(spec.defaultValue))
                         }
-                        check(edit.putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+                        check(edit.markMigrations()
                             .putBoolean("_initialized", true).commit()) { "Could not restore settings" }
                     }
                     migrateLocal(local)
@@ -88,7 +88,7 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
             val value = resolved[spec.key] ?: spec.defaultValue
             put(edit, spec, runCatching { spec.validate(value) }.getOrDefault(spec.defaultValue))
         }
-        check(edit.putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION).commit()) {
+        check(edit.markMigrations().commit()) {
             "Remote settings write was not accepted"
         }
     }
@@ -99,14 +99,17 @@ private fun migrateLocal(preferences: SharedPreferences) {
     val original = preferences.all
     val resolved = SettingsMigration.resolve(original)
     val keys = listOf(SettingsMigration.MEDIA_KEY, SettingsMigration.LOCKSCREEN_KEY,
-        SettingsMigration.EDGE_GAP_KEY, SettingsMigration.VERSION_KEY)
+        SettingsMigration.EDGE_GAP_KEY, SettingsMigration.VERSION_KEY, SettingsMigration.BACKDROP_VERSION_KEY) +
+        SettingsMigration.backdropKeys
     val ownsLocalState = SettingsMigration.hasLocalState(original)
     if (keys.all { original[it] == resolved[it] } && (!ownsLocalState || original["_initialized"] == true)) return
     val edit = preferences.edit()
         .putBoolean(SettingsMigration.MEDIA_KEY, resolved[SettingsMigration.MEDIA_KEY] as Boolean)
         .putBoolean(SettingsMigration.LOCKSCREEN_KEY, resolved[SettingsMigration.LOCKSCREEN_KEY] as Boolean)
         .putFloat(SettingsMigration.EDGE_GAP_KEY, resolved[SettingsMigration.EDGE_GAP_KEY] as Float)
-        .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+        .markMigrations()
+    SettingsMigration.backdropValueKeys.forEach { key -> edit.putFloat(key, resolved[key] as Float) }
+    edit.putBoolean(SettingsMigration.BACKDROP_ENABLED_KEY, resolved[SettingsMigration.BACKDROP_ENABLED_KEY] as Boolean)
     if (ownsLocalState) edit.putBoolean("_initialized", true)
     check(edit.commit()) { "Could not migrate settings" }
 }
@@ -115,6 +118,10 @@ internal fun put(edit: SharedPreferences.Editor, spec: LiteSetting, value: Any) 
     if (spec.isToggle) edit.putBoolean(spec.key, value as Boolean)
     else edit.putFloat(spec.key, (value as Number).toFloat())
 }
+
+private fun SharedPreferences.Editor.markMigrations(): SharedPreferences.Editor =
+    putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+        .putInt(SettingsMigration.BACKDROP_VERSION_KEY, SettingsMigration.BACKDROP_VERSION)
 
 class SettingsRepository(context: Context) {
     private val app = context.applicationContext as LiteApplication
@@ -134,7 +141,7 @@ class SettingsRepository(context: Context) {
     fun set(spec: LiteSetting, value: Any) = synchronized(app.settingsLock) {
         val valid = spec.validate(value)
         val edit = preferences.edit().putBoolean("_initialized", true)
-            .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+            .markMigrations()
         put(edit, spec, valid)
         check(edit.commit()) { "Could not save settings" }
         sync()
@@ -148,7 +155,7 @@ class SettingsRepository(context: Context) {
         val specs = LiteCatalog.entries.filter { it.key in glassPresetKeys }
         val values = specs.associate { it.key to it.validate(preset.values.getValue(it.key)) }
         val edit = preferences.edit().putBoolean("_initialized", true)
-            .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+            .markMigrations()
         if (!hasGlassPresetUndo) {
             edit.putString(GLASS_PRESET_UNDO, SettingsCodec.encode(specs, preferences.all))
         }
@@ -169,6 +176,11 @@ class SettingsRepository(context: Context) {
         sync()
     }
 
+    /** The material-page reset has the same card-only boundary as a built-in recipe. */
+    fun resetGlassMaterial() = applyValues(
+        SettingsCodec.defaults(LiteCatalog.entries.filter { it.key in glassPresetKeys }), clearMaterialTrial = true,
+    )
+
     fun exportJson(): String = SettingsCodec.encode(LiteCatalog.entries, preferences.all)
 
     fun importJson(text: String): Int {
@@ -179,7 +191,7 @@ class SettingsRepository(context: Context) {
 
     private fun applyValues(values: Map<String, Any>, clearMaterialTrial: Boolean = false) = synchronized(app.settingsLock) {
         val edit = preferences.edit().putBoolean("_initialized", true)
-            .putInt(SettingsMigration.VERSION_KEY, SettingsMigration.VERSION)
+            .markMigrations()
         for (spec in LiteCatalog.entries) values[spec.key]?.let { put(edit, spec, it) }
         if (clearMaterialTrial) edit.remove(GLASS_PRESET_UNDO)
         check(edit.commit()) { "Could not save settings" }
@@ -213,7 +225,10 @@ object SettingsCodec {
         val settings = JSONObject()
         specs.forEach { settings.put(it.key, it.validate(resolved[it.key] ?: it.defaultValue)) }
         return JSONObject().put("format", "hyperchange-lite").put("version", 1)
-            .put("settings", settings).toString(2)
+            .apply {
+                if (specs.any { it.key in SettingsMigration.backdropKeys })
+                    put(SettingsMigration.BACKDROP_JSON_VERSION_KEY, SettingsMigration.BACKDROP_VERSION)
+            }.put("settings", settings).toString(2)
     }
 
     fun decode(specs: List<LiteSetting>, text: String): Map<String, Any> {
@@ -223,6 +238,13 @@ object SettingsCodec {
             "Unsupported preset format"
         }
         val settings = root.getJSONObject("settings")
+        val backdropMigrated = if (root.has(SettingsMigration.BACKDROP_JSON_VERSION_KEY)) {
+            val raw = root.get(SettingsMigration.BACKDROP_JSON_VERSION_KEY)
+            require(raw is Number && raw.toDouble().isFinite() && raw.toDouble() >= SettingsMigration.BACKDROP_VERSION) {
+                "Invalid backdrop migration version"
+            }
+            true
+        } else false
         val validated = buildMap {
             specs.forEach { spec -> if (settings.has(spec.key)) put(spec.key, spec.validate(settings.get(spec.key))) }
             if (specs.any { it.key == SettingsMigration.EDGE_GAP_KEY } &&
@@ -238,7 +260,7 @@ object SettingsCodec {
                 put(SettingsMigration.LEGACY_VOLUME_OFFSET_KEY, offset.toFloat())
             }
         }
-        return SettingsMigration.forPreset(specs, validated).mapValues { (key, value) ->
+        return SettingsMigration.forPreset(specs, validated, backdropMigrated).mapValues { (key, value) ->
             specs.first { it.key == key }.validate(value)
         }
     }

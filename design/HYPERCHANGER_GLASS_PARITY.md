@@ -95,7 +95,7 @@ later heads-up session. Core conversion and preset data remain unchanged. See
 
 ## Remaining preview differences
 
-The App still uses the normal-notification recipe for every local scene. Its
+At the 0.1.2 comparison baseline the App used the normal-notification recipe for every local scene. Its
 sampler has fixed local sample baselines: background blur 40, background-scale
 0.075, and dual refraction blur 36/72 before the same relative adjustments. It
 does not capture each live OEM panel's current radii or mode-specific token.
@@ -114,3 +114,10 @@ unmodeled lockscreen transitions and unreconstructed widget/sidebar recipes at
 L/preview/NativePreviewMaterial.kt:22–64. Thus equal sliders or a successful
 native API status do not establish equal SystemUI pixels. Final build tests and
 device appearance remain separate release-acceptance evidence.
+
+Version 0.1.4 separates the card and whole-window layer settings, enable switches
+and refresh queues. Its `SHADE` sample now uses an independent native backdrop
+sampler and shade tint array without the card MiGlass/refraction recipe. Other
+local scenes retain their card sample. See [material layers](MATERIAL_LAYERS.md)
+for the new runtime, migration and preview contract; the source comparison above
+continues to document the earlier baseline.

@@ -17,11 +17,26 @@ internal fun readSoftGlassSettings(p: SharedPreferences): SoftGlassSettings = So
     },
 ).normalized()
 
+/** Whole-window sampling has no card refraction or optical-slot adjustments. */
+internal fun shadeGlassSettings(values: Map<String, *>, enabled: Boolean? = null): SoftGlassSettings {
+    val resolved = SettingsMigration.resolve(values)
+    return SoftGlassSettings(
+        enabled = enabled ?: resolved[SettingsMigration.BACKDROP_ENABLED_KEY] as Boolean,
+        backgroundBlur = (resolved.getValue("glass_shade_blur") as Number).toFloat().roundToInt(),
+        backgroundScale = (resolved.getValue("glass_shade_scale") as Number).toFloat().roundToInt(),
+        backgroundOpacity = (resolved.getValue("glass_shade_opacity") as Number).toFloat().roundToInt(),
+    ).normalized()
+}
+
+internal fun readShadeGlassSettings(p: SharedPreferences): SoftGlassSettings =
+    shadeGlassSettings(p.all)
+
 internal fun SharedPreferences.number(key: String, fallback: Float): Float =
     ((all[key] as? Number)?.toFloat() ?: fallback).takeIf { it.isFinite() } ?: fallback
 
 internal data class GlassRuntimeSettings(
     val glass: SoftGlassSettings,
+    val shadeGlass: SoftGlassSettings,
     val notifications: Boolean,
     val media: Boolean,
     val controlCenter: Boolean,
@@ -34,10 +49,10 @@ internal data class GlassRuntimeSettings(
 ) {
     companion object {
         fun read(p: SharedPreferences) = GlassRuntimeSettings(
-            readSoftGlassSettings(p), p.getBoolean("glass_notifications", true),
+            readSoftGlassSettings(p), readShadeGlassSettings(p), p.getBoolean("glass_notifications", true),
             SettingsMigration.resolve(p.all)[SettingsMigration.MEDIA_KEY] as Boolean,
             p.getBoolean("glass_control_center", true), p.getBoolean("glass_volume", true),
-            p.getBoolean("glass_shade", true), p.getBoolean("glass_unify_notifications", false),
+            shadeGlassSettings(p.all).enabled, p.getBoolean("glass_unify_notifications", false),
             p.getBoolean("glass_assistant", false), p.getBoolean("glass_sidebar", false),
             p.getBoolean("glass_sidebar_unify", false),
         )

@@ -65,7 +65,7 @@ internal class ViewMaterialEngine(
     private var clearBlend: Method? = null
     private var addBlend: Method? = null
     private var refresh: Runnable? = null
-    private var fullRefreshPending = false
+    private val refreshPlan = MaterialRefreshPlan()
     private class Prepared(val input: Array<Any?>, val args: Array<Any?>, val ticket: Long,
                            val scene: NotificationScopeSnapshot?, val parent: Any?, val backdropRevision: Long?)
 
@@ -125,14 +125,14 @@ internal class ViewMaterialEngine(
         installLegacyBlend()
     }
 
-    @Synchronized fun scheduleRefresh(sceneOnly: Boolean = false) {
-        if (!sceneOnly) fullRefreshPending = true
+    @Synchronized fun scheduleRefresh(sceneOnly: Boolean = false, cards: Boolean = true, backdrops: Boolean = true) {
+        refreshPlan.include(sceneOnly, cards, backdrops)
         val ticket = generation.invalidate()
         refresh?.let(handler::removeCallbacks)
         refresh = Runnable {
             if (generation.current(ticket, true)) {
-                val onlyScene = synchronized(this) { (!fullRefreshPending).also { fullRefreshPending = false } }
-                runCatching { replay(ticket, onlyScene) }.onFailure { runtime.log("Material refresh cancelled after a runtime failure", it) }
+                val request = synchronized(this) { refreshPlan.take() }
+                runCatching { replay(ticket, request) }.onFailure { runtime.log("Material refresh cancelled after a runtime failure", it) }
             }
         }.also { handler.postDelayed(it, 16L) }
     }
@@ -225,12 +225,17 @@ internal class ViewMaterialEngine(
         val output: Array<Any?> = when (name) {
             "setMiGlass" -> {
                 val native = baseline[0] as FloatArray
-                val selected = unifiedRecipe(view)?.takeIf(::hasSoftGlassRecipe) ?: native
-                arrayOf(if (settings.enabled) tuneSoftGlass(selected, settings, contextBrightness = contextBrightness(view)) else selected)
+                // Whole-panel glass keeps its OEM optical token. Only the card
+                // layer accepts global recipes, refraction and fourteen-slot tuning.
+                if (isBackdrop(view)) arrayOf(native)
+                else {
+                    val selected = unifiedRecipe(view)?.takeIf(::hasSoftGlassRecipe) ?: native
+                    arrayOf(if (settings.enabled) tuneSoftGlass(selected, settings, contextBrightness = contextBrightness(view)) else selected)
+                }
             }
             "setMiGlassBlurRadius" -> arrayOf(
-                if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.refractionBlur) else baseline[0],
-                if (settings.enabled) softGlassBlur(baseline[1] as Int, settings.refractionBlur) else baseline[1],
+                if (settings.enabled && !isBackdrop(view)) softGlassBlur(baseline[0] as Int, settings.refractionBlur) else baseline[0],
+                if (settings.enabled && !isBackdrop(view)) softGlassBlur(baseline[1] as Int, settings.refractionBlur) else baseline[1],
             )
             "setMiBackgroundBlurRadius" -> arrayOf(if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.backgroundBlur) else baseline[0])
             "setMiBackgroundBlurScaleRatio" -> arrayOf(if (settings.enabled) softGlassScale(baseline[0] as Float, settings.backgroundScale) else baseline[0])
@@ -307,7 +312,7 @@ internal class ViewMaterialEngine(
         }.onFailure { runtime.log("OEM legacy blend API unavailable", it) }
     }
 
-    private fun replay(ticket: Long, sceneOnly: Boolean) = backdropReplay.duringReplay {
+    private fun replay(ticket: Long, request: MaterialRefreshPlan.Request) = backdropReplay.duringReplay {
         retireInactiveBackdrops()
         val (surfaces, legacy) = synchronized(baselines) {
             baselines.map { (view, setters) -> view to setters.toMap() } to
@@ -318,9 +323,10 @@ internal class ViewMaterialEngine(
             val notificationViews = (surfaces.map { it.first } + legacy.map { it.first }).distinct()
                 .filter { nativeNotificationRefresh != null && GlassSurfaces.classify(it) == GlassSurface.NOTIFICATION }
             notificationViews.forEach { view ->
+                if (!request.notifications) return@forEach
                 if (!generation.current(ticket, true)) return@duringReplay
                 val token = synchronized(baselines) { scopeTokens[view] }
-                if (sceneOnly && token != null && NotificationScope.isCurrent(view, token)) return@forEach
+                if (!request.cards && token != null && NotificationScope.isCurrent(view, token)) return@forEach
                 val wasOwned = synchronized(baselines) { owned[view] }
                 val allowed = scopeAllows(view)
                 val stillOwned = wasOwned?.current(view) == true
@@ -335,7 +341,7 @@ internal class ViewMaterialEngine(
                 if (canForgetMaterialState(allowed, stillOwned, transferred)) forget(view)
             }
             surfaces.forEach { (view, setters) ->
-                if (sceneOnly || view in notificationViews) return@forEach
+                if (view in notificationViews || (if (isBackdrop(view)) !request.backdrops else !request.cards)) return@forEach
                 if (!scopeAllows(view)) { forget(view); return@forEach }
                 if (view.isAttachedToWindow) setters.forEach { (method, args) ->
                     if (!generation.current(ticket, scopeAllows(view))) return@forEach
@@ -344,7 +350,7 @@ internal class ViewMaterialEngine(
                 }
             }
             legacy.forEach { (view, colors) ->
-                if (sceneOnly || view in notificationViews) return@forEach
+                if (view in notificationViews || (if (isBackdrop(view)) !request.backdrops else !request.cards)) return@forEach
                 if (!scopeAllows(view)) { forget(view); return@forEach }
                 if (view.isAttachedToWindow && generation.current(ticket, scopeAllows(view))) runCatching {
                     clearBlend?.invoke(view)

@@ -36,14 +36,17 @@ private class SystemGlass(private val runtime: HookRuntime) {
             NotificationScope.role(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
     }
     private val engine = ViewMaterialEngine(runtime, { GlassSurfaces.classify(it) != null }, { view ->
-        val scopeEnabled = when (GlassSurfaces.classify(view)) {
+        val surface = GlassSurfaces.classify(view)
+        val backdrop = surface == GlassSurface.SHADE || GlassSurfaces.isShadeWindow(view)
+        val scopeEnabled = when (surface) {
             GlassSurface.NOTIFICATION -> notificationRange(view)
             GlassSurface.CONTROL_CENTER -> state.controlCenter
             GlassSurface.VOLUME -> state.volume
             GlassSurface.SHADE -> state.shade
             null -> GlassSurfaces.isShadeWindow(view) && state.shade
         }
-        state.glass.copy(enabled = if (GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION)
+        val selected = if (backdrop) state.shadeGlass else state.glass
+        selected.copy(enabled = if (backdrop) state.shadeGlass.enabled else if (surface == GlassSurface.NOTIFICATION)
             notificationPolicy().tune(GlassSurfaces.media(view), NotificationScope.sceneAllows(view))
             else state.glass.enabled && scopeEnabled)
     }, { view ->
@@ -65,7 +68,15 @@ private class SystemGlass(private val runtime: HookRuntime) {
             val next = GlassRuntimeSettings.read(runtime.preferences)
             // One atomic preset edit can notify several keys with the same full
             // snapshot. Recompute each current root once for that actual change.
-            if (next != state) { state = next; refresh() }
+            if (next != state) {
+                val previous = state
+                val cards = next.copy(shadeGlass = previous.shadeGlass, shade = previous.shade) != previous
+                val backdrops = next.shadeGlass != previous.shadeGlass
+                state = next
+                if (cards) runCatching { normal.refresh() }
+                    .onFailure { runtime.log("Notification material refresh cancelled safely", it) }
+                if (cards || backdrops) engine.scheduleRefresh(cards = cards, backdrops = backdrops)
+            }
         }
     }
     fun install() {

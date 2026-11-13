@@ -44,7 +44,8 @@ class SettingsMigrationTest {
             val once = SettingsMigration.resolve(original)
             assertRanges(once, music, locked)
             assertEquals(once, SettingsMigration.resolve(once))
-            assertEquals(original.keys + setOf(marker, edge), once.keys)
+            assertEquals(original.keys + setOf(marker, edge, SettingsMigration.BACKDROP_VERSION_KEY) +
+                SettingsMigration.backdropKeys, once.keys)
         }
     }
 
