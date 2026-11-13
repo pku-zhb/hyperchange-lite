@@ -4,9 +4,16 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
-Version 0.1.1 adopts the shorter hc-lite name. The package, signing identity,
-preference group and configuration format are preserved for existing upgrades
-and imports. Earlier preview versions and their archived filenames remain historical records.
+Version 0.1.2 adds single-tap scrollable editor tabs and corrects the borrowed
+first-show/repeated-key volume behavior. The visible volume track has an explicit
+physical-pixel edge gap (6 px by default; 0 is flush). Existing package, signing
+identity, preference group and configuration format remain upgrade-compatible.
+See [HyperLight behavior review](design/HYPERLIGHT_PARITY.md) for recovered
+contracts, corrected differences, retained defaults and device-test boundaries.
+The [HyperChanger glass comparison](design/HYPERCHANGER_GLASS_PARITY.md) records
+matching core math/recipes and remaining scope/sampling differences. The native
+App preview now uses OEM blend colors without a second painted veil.
+Earlier preview versions and their archived filenames remain historical records.
 
 The retained scope is native soft-glass tuning, notification materials and
 interactions, Control Center corners, volume controls, Personal Assistant widgets

@@ -26,6 +26,10 @@ import com.zhuhuibin.hyperchange.lite.notifications.NotificationMotion
 import com.zhuhuibin.hyperchange.lite.controls.VolumeMotionModel
 import com.zhuhuibin.hyperchange.lite.controls.VolumeSpring
 import com.zhuhuibin.hyperchange.lite.controls.VolumePanelAppearance
+import com.zhuhuibin.hyperchange.lite.controls.VolumeInteractionEvent
+import com.zhuhuibin.hyperchange.lite.controls.VolumeInteractionModel
+import com.zhuhuibin.hyperchange.lite.controls.VolumeInteractionState
+import com.zhuhuibin.hyperchange.lite.controls.VolumePlacementModel
 import com.zhuhuibin.hyperchange.lite.glass.readSoftGlassSettings
 import kotlin.math.abs
 import kotlin.math.max
@@ -71,7 +75,9 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private var downX = 0f
     private var downY = 0f
     private var moved = false
-    private val volumeWidth = VolumeSpring(9f)
+    private val volumeWidth = VolumeSpring(52f)
+    private var volumeState = VolumeInteractionState(visible = true)
+    private var volumeEdgeGapPx = VolumePlacementModel.DEFAULT_EDGE_GAP
     private val volumePop = VolumeSpring(1f)
     private val volumeNudge = VolumeSpring(0f)
     private val volumeDragX = VolumeSpring(0f)
@@ -108,9 +114,9 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                     dp(number("volume_pop_shift", 5.5f)), number("volume_pop_power", 3f))
                 card.scaleX = pop.scale * volumeDragScaleX.value
                 card.scaleY = pop.scale * volumeDragScaleY.value
-                // OEM placement offsets are integer pixels, unlike the motion distances.
-                // Increasing the right margin moves the card left in this local scene.
-                card.translationX = dp(volumeNudge.value) + pop.x + volumeDragX.value - number("volume_offset_x", 0f).toInt()
+                // The preview's right edge represents the screen edge, with the same
+                // physical-pixel gap as the runtime visible track.
+                card.translationX = volumeEdgeTranslation() + dp(volumeNudge.value) + pop.x + volumeDragX.value
                 card.translationY = pop.y + volumeDragY.value + number("volume_offset_y", 0f).toInt()
             }
             if (moving || volumeReturnAt != 0L) postOnAnimation(this) else volumeScheduled = false
@@ -271,17 +277,30 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             PreviewAction.ROW_EXIT -> playStack(true)
             PreviewAction.VOLUME_POP -> showVolume()
             PreviewAction.VOLUME_WIDTH -> if (behavior.volume) {
-                volumeWidth.snap(52f); pressVolume(false, false)
+                showVolume()
+                // A second key update is distinct from the initial wide show.
+                handler.postDelayed({
+                    if (isAttachedToWindow && !released && scene == Scene.VOLUME && !volumeTouching)
+                        updateVolumePhase(VolumeInteractionEvent.HARDWARE_KEY)
+                }, 600L)
             }
             PreviewAction.VOLUME_NUDGE -> if (behavior.volume) {
+                volumeState = VolumeInteractionModel.transition(VolumeInteractionState(visible = true), VolumeInteractionEvent.HARDWARE_KEY)
                 volumeWidth.snap(number("volume_thin_width", 9f))
+                layoutScene()
                 val (k, d) = VolumeMotionModel.nudgeCoefficients(number("volume_nudge_response", .8f), number("volume_nudge_damping", .9f))
                 volumeNudge.target(-number("volume_nudge", 6.5f), k, d)
                 volumeReturnAt = SystemClock.uptimeMillis() + 100L
                 scheduleVolume()
             }
             PreviewAction.GROUP -> { expanded = false; layoutScene() }
-            PreviewAction.STATIC -> layoutScene()
+            PreviewAction.STATIC -> {
+                if (scene == Scene.VOLUME && focusedSetting == "volume_edge_gap" && behavior.volume) {
+                    volumeState = VolumeInteractionModel.transition(VolumeInteractionState(visible = true), VolumeInteractionEvent.HARDWARE_KEY)
+                    volumeWidth.snap(number("volume_thin_width", 9f))
+                }
+                layoutScene()
+            }
         }
     }
 
@@ -321,6 +340,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         // layout underneath an animator that still writes its previous values.
         cancelAnimations()
         behavior = previewBehavior(preferences.all)
+        readVolumePlacement()
         removed = false
         mainCard?.visibility = View.VISIBLE
         surfaces.forEach { it.updateMaterial() }
@@ -511,8 +531,9 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 surfaces.forEachIndexed { i, card ->
                     val depth = 2 - i
                     if (card !== mainCard) card.visibility = if (expanded || behavior.group) View.VISIBLE else View.INVISIBLE
-                    val frame = NotificationMotion.group(depth, number("notification_group_stack_spacing", 6f), number("notification_group_stack_scale", .95f))
-                    val y = if (expanded) top + depth * (cardHeight + gap) else top + dp(frame.offsetDp).roundToInt().coerceAtMost((h - top - cardHeight).coerceAtLeast(0))
+                    val frame = NotificationMotion.group(depth, 0f, number("notification_group_stack_scale", .95f))
+                    val offset = depth * NotificationMotion.groupSpacingPx(number("notification_group_stack_spacing", 6f), resources.displayMetrics.density)
+                    val y = if (expanded) top + depth * (cardHeight + gap) else top + offset.roundToInt().coerceAtMost((h - top - cardHeight).coerceAtLeast(0))
                     place(card, margin, y, width, cardHeight, if (expanded) 1f else frame.scale)
                     card.alpha = if (expanded || depth == 0) 1f else .92f
                 }
@@ -564,23 +585,29 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 }
                 surfaces.getOrNull(0)?.visibility = View.VISIBLE
                 surfaces.getOrNull(1)?.visibility = View.GONE
-                val hideRinger = VolumePanelAppearance.hideRinger(false, false, behavior.volume,
+                val hideRinger = VolumePanelAppearance.hideRinger(false, false, behavior.volume && volumeState.narrow,
                     preferences.getBoolean("volume_hide_ringer", false))
-                val x = w / 2 - dp(if (hideRinger) 26 else 52)
-                val barWidth = dp(if (!behavior.volume) 52f else if (volumeScheduled) volumeWidth.value else number("volume_thin_width", 9f)).roundToInt().coerceIn(dp(4), dp(84))
+                val barWidth = dp(if (behavior.volume) volumeWidth.value else 52f).roundToInt().coerceIn(dp(4), dp(84))
                 val barHeight = dp(if (behavior.volume) number("volume_height", 150f) else 150f).roundToInt().coerceAtLeast(dp(24)).coerceAtMost(availableHeight)
                 surfaces.getOrNull(0)?.let {
-                    place(it, x, (h - barHeight) / 2, barWidth, barHeight)
-                    if (behavior.volume) {
-                        it.translationX = -number("volume_offset_x", 0f).toInt().toFloat()
-                        it.translationY = number("volume_offset_y", 0f).toInt().toFloat()
+                    place(it, w - barWidth, (h - barHeight) / 2, barWidth, barHeight)
+                    // Keep the visual right edge fixed while its width spring runs.
+                    // The native wide session stays at its ordinary inset; narrowing
+                    // moves its visible edge to the configured screen gap.
+                    (it.layoutParams as LayoutParams).apply {
+                        gravity = Gravity.TOP or Gravity.RIGHT
+                        leftMargin = 0
+                        rightMargin = dp(24)
                     }
+                    it.requestLayout()
+                    it.translationX = if (behavior.volume) volumeEdgeTranslation() else 0f
+                    it.translationY = if (behavior.volume) number("volume_offset_y", 0f).toInt().toFloat() else 0f
                 }
                 surfaces.getOrNull(2)?.let {
                     it.visibility = if (hideRinger) View.GONE else View.VISIBLE
                     if (!hideRinger) {
                         val controlHeight = dp(84).coerceAtMost(availableHeight)
-                        place(it, x + dp(64), (h - controlHeight) / 2, dp(44), controlHeight)
+                        place(it, (w - dp(24) - barWidth - dp(56)).coerceAtLeast(0), (h - controlHeight) / 2, dp(44), controlHeight)
                     }
                 }
             }
@@ -650,12 +677,10 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         if (!behavior.headsUp) { card.visibility = View.VISIBLE; layoutScene(); return }
         val prefix = if (exit) "notification_heads_up_pop_exit" else "notification_heads_up_pop"
         fun duration(key: String, fallback: Float) = number(key, fallback).coerceIn(200f, 1500f).toLong()
-        fun delay(key: String, fallback: Float): Long {
-            val value = number(key, fallback).coerceIn(0f, 600f).toLong()
-            return if (exit) value else value.coerceAtLeast(32L)
-        }
+        fun delay(key: String, fallback: Float, scale: Boolean = false): Long =
+            NotificationMotion.headsUpDelay(number(key, fallback).coerceIn(0f, 600f).toLong(), entering = !exit, scale = scale)
         val scaleDuration = duration("${prefix}_duration", 500f)
-        val scaleDelay = delay("${prefix}_delay", 150f)
+        val scaleDelay = delay("${prefix}_delay", 150f, scale = true)
         val flipDuration = duration("notification_heads_up_pop_flip_duration", 500f)
         val flipDelay = delay("notification_heads_up_pop_flip_delay", 100f)
         val blurDuration = duration("notification_heads_up_pop_blur_duration", 1000f)
@@ -734,17 +759,18 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
 
     private fun showVolume() {
         if (!behavior.volume) { layoutScene(); return }
+        readVolumePlacement()
+        volumeState = VolumeInteractionModel.transition(VolumeInteractionState(), VolumeInteractionEvent.SHOW)
         volumeWidth.snap(52f)
+        layoutScene()
         // The source parameter is the initial scale, not an amount subtracted from 1.
         // popTransform maps progress 0..1 to the shared scale/negative-translation curve.
         volumePop.snap(0f)
         val (k, d) = VolumeMotionModel.popCoefficients(number("volume_pop_duration", 1000f), number("volume_pop_damping", 1f))
         volumePop.target(1f, k, d)
-        val (nk, nd) = VolumeMotionModel.nudgeCoefficients(number("volume_nudge_response", .8f), number("volume_nudge_damping", .9f))
         volumeNudge.snap(0f)
-        volumeNudge.target(-number("volume_nudge", 6.5f), nk, nd)
-        volumeReturnAt = SystemClock.uptimeMillis() + 100L
-        pressVolume(false, false)
+        volumeReturnAt = 0L
+        scheduleVolume()
     }
 
     private fun dragVolume(dx: Float, dy: Float) {
@@ -756,12 +782,29 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         scheduleVolume()
     }
 
-    private fun pressVolume(pressed: Boolean, captureWidth: Boolean = true) {
-        if (!volumeScheduled && captureWidth) volumeWidth.snap(surfaces.firstOrNull()?.width?.div(resources.displayMetrics.density) ?: number("volume_thin_width", 9f))
+    private fun pressVolume(pressed: Boolean) = updateVolumePhase(
+        if (pressed) VolumeInteractionEvent.TOUCH_DOWN else VolumeInteractionEvent.TOUCH_UP)
+
+    private fun updateVolumePhase(event: VolumeInteractionEvent) {
+        volumeState = VolumeInteractionModel.transition(volumeState, event)
         val (k, d) = VolumeMotionModel.widthCoefficients(number("volume_motion_duration", 600f))
-        volumeWidth.target(if (pressed) 52f else number("volume_thin_width", 9f), k, d)
+        volumeWidth.target(if (volumeState.narrow) number("volume_thin_width", 9f) else 52f, k, d)
+        layoutScene()
         scheduleVolume()
     }
+
+    private fun readVolumePlacement() {
+        val values = preferences.all
+        volumeEdgeGapPx = VolumePlacementModel.resolveEdgeGap(
+            (values["volume_edge_gap"] as? Number)?.toFloat(),
+            (values["volume_offset_x"] as? Number)?.toFloat())
+    }
+
+    private fun volumeEdgeGap(): Float = volumeEdgeGapPx
+
+    private fun volumeEdgeTranslation(): Float = VolumePlacementModel.edgeTranslation(
+        content.width.toFloat(), content.width - dp(24).toFloat(), volumeEdgeGap()) *
+        VolumePlacementModel.narrowFraction(volumeWidth.value, number("volume_thin_width", 9f), 52f)
 
     private fun scheduleVolume() {
         if (!volumeScheduled) {
@@ -845,7 +888,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             } else if (behavior.rowTilt) "轻点展开 · 按住查看倾斜" else "轻点展开；按压效果已关闭"
             Scene.HEADS_UP -> if (behavior.headsUp) "轻点重播弹出" else "悬浮动画已关闭"
             Scene.MEDIA -> if (behavior.mediaTilt) "按住查看倾斜" else "音乐按压效果已关闭"
-            Scene.VOLUME -> if (behavior.volume) "按住变宽 · 松开收窄" else "窄音量条已关闭，显示普通宽度"
+            Scene.VOLUME -> if (behavior.volume) "首次宽条 · 连按收窄 · 按住变宽" else "窄音量条已关闭，显示普通宽度"
             else -> "实时调参"
         }
         val state = currentMaterialState()
@@ -919,9 +962,11 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             val state = currentMaterialState()
             nativeApplied = material.apply(this, state.settings)
             val opacity = if (state.settings.enabled) state.settings.backgroundOpacity / 100f else 1f
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
-                if (night) Color.argb(((if (nativeApplied) 20 else 166) * opacity).roundToInt().coerceIn(0, 240), 26, 37, 51)
-                else Color.argb(((if (nativeApplied) 22 else 185) * opacity).roundToInt().coerceIn(0, 240), 255, 255, 255),
+            // Native glass owns tint/opacity through its OEM blend colors. A second
+            // painted veil would make the editor look cloudier than its system recipe.
+            background = if (nativeApplied) null else GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
+                if (night) Color.argb((166 * opacity).roundToInt().coerceIn(0, 240), 26, 37, 51)
+                else Color.argb((185 * opacity).roundToInt().coerceIn(0, 240), 255, 255, 255),
                 if (night) Color.argb((68 * opacity).roundToInt().coerceIn(0, 240), 43, 53, 71)
                 else Color.argb((102 * opacity).roundToInt().coerceIn(0, 240), 255, 255, 255),
             )).apply { cornerRadius = radius; setStroke(dp(1), if (night) 0x28ffffff else 0x80ffffff.toInt()) }

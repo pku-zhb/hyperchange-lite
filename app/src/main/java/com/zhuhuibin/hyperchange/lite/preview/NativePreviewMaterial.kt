@@ -3,10 +3,12 @@ package com.zhuhuibin.hyperchange.lite.preview
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Point
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.SettingsMigration
 import com.zhuhuibin.hyperchange.lite.glass.SoftGlassSettings
 import com.zhuhuibin.hyperchange.lite.glass.softGlassBlur
+import com.zhuhuibin.hyperchange.lite.glass.softGlassColorAlpha
 import com.zhuhuibin.hyperchange.lite.glass.softGlassScale
 import com.zhuhuibin.hyperchange.lite.glass.tuneSoftGlass
 import java.lang.reflect.Method
@@ -82,7 +84,8 @@ internal fun previewRadius(
 
 /** Uses the installed OEM recipe; no copied HyperLight material or native binary. */
 internal class NativePreviewMaterial(private val context: Context) {
-    private var recipe: FloatArray? = null
+    private data class Recipe(val glass: FloatArray, val blends: List<Point>)
+    private var recipe: Recipe? = null
     private var night = false
     private var resolved = false
     private val methods = HashMap<String, Method?>()
@@ -110,13 +113,22 @@ internal class NativePreviewMaterial(private val context: Context) {
             optional(view, "setMiGlassSdfMaxSize", view.width.toFloat(), view.height.toFloat())
             val refraction = if (glass.enabled) glass.refractionBlur else 100
             invoke(view, "setMiGlassBlurRadius", softGlassBlur(36, refraction), softGlassBlur(72, refraction))
-            invoke(view, "setMiGlass", tuneSoftGlass(original.copyOf(), glass))
+            invoke(view, "setMiGlass", tuneSoftGlass(original.glass.copyOf(), glass))
+            // The local view has no OEM NotificationRowBlurEffect to seed its blend
+            // texture. Supply that effect's normal shade colors once through the
+            // batch setter; do not add a second Drawable tint above native glass.
+            val opacity = if (glass.enabled) glass.backgroundOpacity else 100
+            invoke(view, "setMiBackgroundBlendColors", ArrayList(original.blends.map {
+                Point(softGlassColorAlpha(it.x, opacity), it.y)
+            }))
             view.invalidate()
             true
         }.getOrElse { clear(view); false }
     }
 
     fun clear(view: View) {
+        optional(view, "setMiBackgroundBlendColors", arrayListOf<Point>())
+        optional(view, "clearMiBackgroundBlendColor")
         optional(view, "setMiGlass", floatArrayOf())
         optional(view, "setMiViewMaterialType", 0)
         optional(view, "setMiBackgroundBlurMode", 0)
@@ -135,8 +147,16 @@ internal class NativePreviewMaterial(private val context: Context) {
             val resources = app.createConfigurationContext(config).resources
             val id = resources.getIdentifier("notification_glass_params_normal", "array", "com.android.systemui")
             if (id == 0) return@runCatching null
-            resources.getStringArray(id).map { it.toFloatOrNull() ?: return@runCatching null }.toFloatArray()
+            val glass = resources.getStringArray(id).map { it.toFloatOrNull() ?: return@runCatching null }.toFloatArray()
                 .takeIf { it.size >= 42 && it.all(Float::isFinite) && it.any { value -> value != 0f } }
+                ?: return@runCatching null
+            val blends = (1..2).map { index ->
+                val color = resources.getIdentifier("notification_element_blend_shade_color_$index", "color", "com.android.systemui")
+                val mode = resources.getIdentifier("notification_element_blend_shade_mode_$index", "integer", "com.android.systemui")
+                check(color != 0 && mode != 0) { "Normal notification blend resources are unavailable" }
+                Point(resources.getColor(color, null), resources.getInteger(mode))
+            }
+            Recipe(glass, blends)
         }.getOrNull()
     }
 

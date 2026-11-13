@@ -1,5 +1,37 @@
 # Host validation
 
+## 0.1.2 editor, volume and reference review
+
+- All 156 JVM tests in 28 suites passed, with no failures, errors or skips.
+  Added coverage includes first-show/key/touch volume phases, independent native
+  width restoration, zero-gap and interpolated edge placement, legacy preset and
+  first-binding migration, integer stack spacing, heads-up delay and blur timing.
+- `:app:lintDebug` and `git diff --check` passed. Final signed Debug and optimized
+  Release packages are built from the committed source; local archival receipts
+  bind each retained APK to its source revision and signing identity.
+- Material, notification and volume editors use native Miuix scrollable project
+  tabs under the pinned rendered sample. Numeric controls keep exact input and
+  validated import/export. The visible track gap uses physical pixels; only its
+  narrow phase approaches the edge, leaving native wide placement intact.
+- The first-show error came from narrowing during show/refresh. A shared session
+  model now distinguishes showing from subsequent hardware-key updates. Native
+  slider touch handling remains intact; automatic footer hiding follows the
+  actual narrow phase. Existing offset presets migrate to the explicit edge gap.
+- HyperLight source review corrected nested press arbitration, minimum flip/blur
+  exit delays, integer spacing, positive-half-up blur quantization, heads-up blur
+  throttling, and the missing OEM add/remove property-update dispatch. Intentional
+  ownership/stability protections and historical defaults are documented in
+  [the comparison](HYPERLIGHT_PARITY.md).
+- HyperChanger's parameter body and all six recipes match the pinned upstream.
+  Native preview setup now seeds normal-notification blend colors and removes
+  the previous extra gradient/stroke. Scope and sampling differences remain
+  explicit in [the glass review](HYPERCHANGER_GLASS_PARITY.md).
+- No phone GUI, screenshots, settings changes, scope restarts or reboot were
+  used. Source/host checks do not establish device rendering, OEM first-key
+  callback ordering or edge clipping/touch accessibility. Acceptance is limited
+  to this round: direct tabs and auto-preview; first/repeated/touch volume phases
+  with edge gap 0/6; original glass preset comparison in App and a live surface.
+
 ## Unified material editor source branch
 
 - `LITE_DEV_CACHE=/Volumes/Harbor/DevCache/hyperchange-lite-material-editor
