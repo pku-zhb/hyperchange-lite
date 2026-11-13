@@ -93,12 +93,32 @@ so switching from a solid fallback to compositor blur cannot resurrect a stale
 color on a later parameter edit. The native Lazy background is resolved only
 after the controller has already used it, preserving startup order.
 
+A weak `SolidBackdropAlphaLease` is created only when tuning changes a nonzero
+native alpha to zero. It records the exact native owner, background View,
+ViewRootImpl and nullable Drawable identity. When tuning is disabled, the explicit
+0/0 state is left, or strict scope ownership is revoked, the lease authorizes one
+fresh native update only while those identities remain unchanged, the View is
+attached and alpha is still our zero. A newer native alpha, replaced
+View/root/Drawable, detach or missing weak target retires the lease without a
+write. The lease is consumed before invoking native code, so reentry/failure
+cannot retry an old release or erase a newly created lease.
+
+This retained APK's complete `ShadeSolidBackgroundController.updateWindow`
+method explicitly calls `view.setAlpha(1.0f)` in its non-screenshot branch before
+setting/clearing the solid background. Its screenshot branch calls
+`view.setAlpha(currentWindowRatio)` before returning. Therefore fresh native
+update is sufficient to restore current alpha on this ROM; no historical alpha
+value is stored or replayed. Natural native updates first retire the old lease,
+including when the native result itself is alpha zero.
+
 ## Verification boundary
 
 Host tests cover 0/100/200/disabled radius behavior, the explicit two-zero clear
 state, exact root identity, close/generation revocation, nested calls, failed
 scope probes, native exceptions, thread isolation, tint-mode distinction and the
-stored-scale/runtime distinction. They do not establish pixel equivalence on a
+stored-scale/runtime distinction, and one-shot alpha ownership release with
+identity replacement, superseding native alpha, detach, native failure and
+reentry. They do not establish pixel equivalence on a
 phone. Device acceptance should compare a pulled-down notification center and
 control center over the same App at 100/100 and 0/0; card appearance should remain
 unchanged, closing should restore the App, and a top banner alone must not alter

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package com.zhuhuibin.hyperchange.lite.glass
 
+import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.view.SurfaceControl
@@ -106,32 +107,61 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
         val get = runCatching { field.type.getMethod("get").apply { isAccessible = true } }.getOrNull() ?: return
         val update = runCatching { type.getDeclaredMethod("updateWindow").apply { isAccessible = true } }.getOrNull() ?: return
         val owners = WeakHashMap<Any, WeakReference<View>>()
+        val leases = WeakHashMap<Any, SolidBackdropAlphaLease<Any, View, Drawable>>()
         runtime.hook(update, "window-backdrop:solid-current") { chain ->
             val result = chain.proceed()
             runCatching {
                 val owner = chain.thisObject ?: return@runCatching
+                // Both retained native branches set their current alpha, superseding
+                // our previous write even when the new native value happens to be zero.
+                synchronized(leases) { leases.remove(owner) }
                 // Resolve only after the OEM has used this Lazy, preserving startup order.
                 val view = get.invoke(field.get(owner)) as? View ?: return@runCatching
                 synchronized(owners) { owners[owner] = WeakReference(view) }
                 nativeBackground(view)
                 val epoch = ShadeScope.generation
                 if (WindowBackdropPolicy.transparent(settings()) && view.isAttachedToWindow &&
-                    ShadeScope.allows(view) && epoch == ShadeScope.generation) {
+                    ShadeScope.allows(view) && epoch == ShadeScope.generation && view.alpha != 0f) {
+                    val root = viewRoot?.invoke(view) ?: return@runCatching
+                    val lease = SolidBackdropAlphaLease(owner, view, root, view.background)
                     // Also removes the OEM's preblurred screenshot fallback at the
                     // explicit transparent endpoint; never multiply a card's alpha.
                     view.alpha = 0f
+                    synchronized(leases) { leases[owner] = lease }
+                    if (epoch != ShadeScope.generation || !WindowBackdropPolicy.transparent(settings()) ||
+                        !ShadeScope.allows(view)) scheduleRefresh()
                 }
             }.onFailure { runtime.log("Solid backdrop retained native state", it) }
             result
         }
         solidRefresh = {
             val current = synchronized(owners) { owners.entries.map { it.key to it.value.get() } }
-            current.forEach { (owner, view) ->
-                if (view != null && view.isAttachedToWindow && ShadeScope.allows(view)) {
-                    val epoch = ShadeScope.generation
-                    if (get.invoke(field.get(owner)) === view && epoch == ShadeScope.generation)
-                        update.invoke(owner)
+            current.forEach { (owner, recordedView) ->
+                val view = get.invoke(field.get(owner)) as? View
+                val lease = synchronized(leases) { leases[owner] }
+                val epoch = ShadeScope.generation
+                val admitted = view != null && view.isAttachedToWindow && ShadeScope.allows(view) &&
+                    epoch == ShadeScope.generation
+                val state = settings()
+                val needsOverride = admitted && WindowBackdropPolicy.transparent(state)
+                val root = view?.let { viewRoot?.invoke(it) }
+                val restored = lease?.retire(needsOverride, owner, view, root, view?.background,
+                    view?.isAttachedToWindow == true, view?.alpha ?: Float.NaN) { nativeOwner ->
+                    synchronized(leases) { if (leases[nativeOwner] === lease) leases.remove(nativeOwner) }
+                    // The retained native non-screenshot path sets alpha=1; its
+                    // screenshot path sets alpha=current ratio. No saved alpha is replayed.
+                    update.invoke(nativeOwner)
+                } == true
+                if (lease?.retired == true) synchronized(leases) {
+                    if (leases[owner] === lease) leases.remove(owner)
                 }
+                // An expired lease cannot authorize a write to a new View/root, or
+                // overwrite a newer native alpha. A later independent scoped edit
+                // can still use the normal current-state refresh below.
+                val retiredWithoutRestore = lease?.retired == true && !restored
+                if (!restored && !retiredWithoutRestore && state.enabled && admitted && view === recordedView &&
+                    epoch == ShadeScope.generation && get.invoke(field.get(owner)) === view)
+                    update.invoke(owner)
             }
         }
     }
