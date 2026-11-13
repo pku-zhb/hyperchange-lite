@@ -7,6 +7,7 @@ import com.zhuhuibin.hyperchange.lite.controls.VolumePlacementModel
 internal object SettingsMigration {
     const val MEDIA_KEY = "glass_media"
     const val LOCKSCREEN_KEY = "notification_lockscreen_effects"
+    const val LOCKSCREEN_ANIMATIONS_KEY = "notification_lockscreen_animations"
     const val EDGE_GAP_KEY = "volume_edge_gap"
     const val LEGACY_VOLUME_OFFSET_KEY = "volume_offset_x"
     const val VERSION_KEY = "_scope_migration_version"
@@ -24,7 +25,7 @@ internal object SettingsMigration {
     )
     // Later opt-ins must neither make an old full export incomplete nor turn a
     // new partial edit into evidence of the legacy combined scopes.
-    private val laterScopeKeys = setOf(MEDIA_KEY, LOCKSCREEN_KEY, EDGE_GAP_KEY, "glass_heads_up")
+    private val laterScopeKeys = setOf(MEDIA_KEY, LOCKSCREEN_KEY, LOCKSCREEN_ANIMATIONS_KEY, EDGE_GAP_KEY, "glass_heads_up")
 
     private val legacyKeys by lazy {
         (LiteCatalog.entries.map { it.key }.toSet() + LEGACY_VOLUME_OFFSET_KEY) -
@@ -44,6 +45,7 @@ internal object SettingsMigration {
             put(MEDIA_KEY, values[MEDIA_KEY] as? Boolean
                 ?: if (legacy) values["glass_notifications"] as? Boolean ?: true else false)
             put(LOCKSCREEN_KEY, values[LOCKSCREEN_KEY] as? Boolean ?: legacy)
+            put(LOCKSCREEN_ANIMATIONS_KEY, values[LOCKSCREEN_ANIMATIONS_KEY] as? Boolean ?: false)
             put(EDGE_GAP_KEY, VolumePlacementModel.resolveEdgeGap(
                 (values[EDGE_GAP_KEY] as? Number)?.toFloat(),
                 if (EDGE_GAP_KEY in values) null else (values[LEGACY_VOLUME_OFFSET_KEY] as? Number)?.toFloat(),
@@ -87,6 +89,7 @@ internal object SettingsMigration {
         val resolved = if (migrateScopes || (EDGE_GAP_KEY in keys && hasPosition)) resolve(values) else values
         return resolved.filterKeys {
             it in keys && (it != EDGE_GAP_KEY || hasPosition) &&
+                (it != LOCKSCREEN_ANIMATIONS_KEY || it in values) &&
                 (it !in backdropKeys || it in values || migrateBackdrop)
         }
     }

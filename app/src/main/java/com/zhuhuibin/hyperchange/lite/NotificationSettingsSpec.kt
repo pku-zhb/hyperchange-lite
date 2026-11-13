@@ -7,7 +7,8 @@ object NotificationSettingsSpec {
             add(LiteSetting.toggle(key, title, group, default, summary))
         fun number(key: String, title: String, group: String, default: Float, min: Float, max: Float, step: Float = 1f, summary: String = "") =
             add(LiteSetting.number(key, title, group, default, min, max, step, summary))
-        toggle(SettingsMigration.LOCKSCREEN_KEY, "锁屏通知材质与动画", "通知作用范围", summary = "注意兼容：与 HMC 共用锁屏美化时关闭；不影响已解锁通知栏")
+        toggle(SettingsMigration.LOCKSCREEN_KEY, "锁屏通知材质", "通知作用范围", summary = "注意兼容")
+        toggle(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY, "锁屏通知动画", "通知作用范围", summary = "注意兼容")
         val tilt = "通知按压"
         toggle("notification_press_tilt_enabled", "按压倾斜反馈", tilt, summary = "按住卡片时随落点倾斜并轻微缩小；开启后可调下方参数")
         toggle("notification_press_tilt_row_enabled", "对普通通知生效", tilt, true)

@@ -101,7 +101,7 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
 private fun migrateLocal(preferences: SharedPreferences) {
     val original = preferences.all
     val resolved = SettingsMigration.resolve(original)
-    val keys = listOf(SettingsMigration.MEDIA_KEY, SettingsMigration.LOCKSCREEN_KEY,
+    val keys = listOf(SettingsMigration.MEDIA_KEY, SettingsMigration.LOCKSCREEN_KEY, SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY,
         SettingsMigration.EDGE_GAP_KEY, SettingsMigration.VERSION_KEY, SettingsMigration.BACKDROP_VERSION_KEY) +
         SettingsMigration.backdropKeys
     val ownsLocalState = SettingsMigration.hasLocalState(original)
@@ -109,6 +109,7 @@ private fun migrateLocal(preferences: SharedPreferences) {
     val edit = preferences.edit()
         .putBoolean(SettingsMigration.MEDIA_KEY, resolved[SettingsMigration.MEDIA_KEY] as Boolean)
         .putBoolean(SettingsMigration.LOCKSCREEN_KEY, resolved[SettingsMigration.LOCKSCREEN_KEY] as Boolean)
+        .putBoolean(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY, resolved[SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY] as Boolean)
         .putFloat(SettingsMigration.EDGE_GAP_KEY, resolved[SettingsMigration.EDGE_GAP_KEY] as Float)
         .markMigrations()
     SettingsMigration.backdropValueKeys.forEach { key -> edit.putFloat(key, resolved[key] as Float) }

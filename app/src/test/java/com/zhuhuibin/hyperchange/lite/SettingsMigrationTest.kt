@@ -5,6 +5,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SettingsMigrationTest {
+    @Test fun lockscreenAnimationsAreNeverInheritedFromLegacyMaterialCoverage() {
+        val legacy = SettingsMigration.resolve(mapOf("glass_notifications" to true))
+        assertTrue(legacy[SettingsMigration.LOCKSCREEN_KEY] as Boolean)
+        assertEquals(false, legacy[SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY])
+        val partial = SettingsMigration.resolve(mapOf(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY to true))
+        assertEquals(false, partial[SettingsMigration.MEDIA_KEY])
+        assertEquals(false, partial[SettingsMigration.LOCKSCREEN_KEY])
+        assertEquals(true, partial[SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY])
+    }
+
+    @Test fun materialOnlyPresetDoesNotResetTheIndependentAnimationPermission() {
+        val preset = SettingsMigration.forPreset(LiteCatalog.entries, mapOf("glass_enabled" to true))
+        assertFalse(preset.containsKey(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY))
+        val explicit = SettingsMigration.forPreset(LiteCatalog.entries,
+            mapOf(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY to true))
+        assertEquals(mapOf(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY to true), explicit)
+    }
     private val media = SettingsMigration.MEDIA_KEY
     private val lockscreen = SettingsMigration.LOCKSCREEN_KEY
     private val edge = SettingsMigration.EDGE_GAP_KEY
@@ -67,7 +84,8 @@ class SettingsMigrationTest {
             val once = SettingsMigration.resolve(original)
             assertRanges(once, music, locked)
             assertEquals(once, SettingsMigration.resolve(once))
-            assertEquals(original.keys + setOf(marker, edge, SettingsMigration.BACKDROP_VERSION_KEY) +
+            assertEquals(original.keys + setOf(marker, edge, SettingsMigration.BACKDROP_VERSION_KEY,
+                SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY) +
                 SettingsMigration.backdropKeys, once.keys)
         }
     }

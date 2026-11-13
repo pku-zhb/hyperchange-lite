@@ -12,11 +12,18 @@ internal data class NotificationScene(
 ) {
     val confirmedUnlocked: Boolean
         get() = showing == false && dozing == false && transitioning == false && statusBarState == 0
+    val confirmedLitKeyguard: Boolean
+        get() = showing == true && dozing == false && transitioning == false &&
+            (statusBarState == 1 || statusBarState == 2)
 }
 
 internal object NotificationScopePolicy {
     fun allows(role: NotificationRole, lockscreenEffects: Boolean, scene: NotificationScene): Boolean =
         role != NotificationRole.ORDINARY || lockscreenEffects || scene.confirmedUnlocked
+
+    /** Every animation role yields in unknown, AOD and transitioning scenes. */
+    fun animationAllows(lockscreenAnimations: Boolean, scene: NotificationScene): Boolean =
+        scene.confirmedUnlocked || lockscreenAnimations && scene.confirmedLitKeyguard
 }
 
 /** A queued callback cannot regain ownership after a scope or role round trip. */

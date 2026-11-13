@@ -19,8 +19,10 @@ internal object NotificationScope {
     private val pendingRoles = WeakHashMap<View, NotificationRole>()
     private val roleGenerations = WeakHashMap<View, Long>()
     @Volatile private var sceneGeneration = 0L
+    @Volatile private var animationGeneration = 0L
     @Volatile private var scene = NotificationScene()
     @Volatile private var lockscreenEffects = false
+    @Volatile private var lockscreenAnimations = false
     @Volatile var generation = 0L
         private set
     private var installed = false
@@ -52,6 +54,26 @@ internal object NotificationScope {
         refreshSnapshot()
         return scene.confirmedUnlocked
     }
+
+    fun confirmedLitKeyguard(): Boolean {
+        refreshSnapshot()
+        return pendingTransitions == 0 && scene.confirmedLitKeyguard
+    }
+
+    /** Material permission never grants transform or animation ownership. */
+    fun animationAllows(view: View): Boolean {
+        refreshSnapshot()
+        return pendingTransitions == 0 && !GlassSurfaces.excluded(view) &&
+            NotificationScopePolicy.animationAllows(lockscreenAnimations, scene)
+    }
+
+    fun animationToken(view: View): NotificationScopeToken {
+        refreshSnapshot()
+        return token(view, readRole(view), false).copy(generation = animationGeneration)
+    }
+
+    fun isAnimationCurrent(view: View, token: NotificationScopeToken): Boolean =
+        animationAllows(view) && token == animationToken(view)
 
     fun sceneAllows(view: View): Boolean {
         decision(view)?.let { return it.allowed }
@@ -99,16 +121,21 @@ internal object NotificationScope {
         if (installed || runtime.packageName != "com.android.systemui") return
         installed = true
         fun preferencesChanged() {
-            val enabled = SettingsMigration.resolve(runtime.preferences.all)[SettingsMigration.LOCKSCREEN_KEY] == true
-            if (lockscreenEffects != enabled) {
+            val resolved = SettingsMigration.resolve(runtime.preferences.all)
+            val enabled = resolved[SettingsMigration.LOCKSCREEN_KEY] == true
+            val animations = resolved[SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY] == true
+            val materialChanged = lockscreenEffects != enabled
+            val animationChanged = lockscreenAnimations != animations
+            if (materialChanged || animationChanged) {
                 lockscreenEffects = enabled
-                invalidate()
+                lockscreenAnimations = animations
+                invalidate(sceneChanged = materialChanged, animationChanged = animationChanged)
             }
         }
         preferencesChanged()
         preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             // Missing keys can still be a legacy remote snapshot until the settings App opens.
-            if (key == null || key == SettingsMigration.LOCKSCREEN_KEY || key == SettingsMigration.VERSION_KEY ||
+            if (key == null || key == SettingsMigration.LOCKSCREEN_KEY || key == SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY || key == SettingsMigration.VERSION_KEY ||
                 !runtime.preferences.contains(SettingsMigration.LOCKSCREEN_KEY)) preferencesChanged()
         }.also(runtime.preferences::registerOnSharedPreferenceChangeListener)
 
@@ -205,14 +232,19 @@ internal object NotificationScope {
                 scene = next
                 generation++
                 sceneGeneration++
+                animationGeneration++
                 true
             }
         }
         if (changed) notifyListeners()
     }
 
-    private fun invalidate(sceneChanged: Boolean = true) {
-        synchronized(this) { generation++; if (sceneChanged) sceneGeneration++ }
+    private fun invalidate(sceneChanged: Boolean = true, animationChanged: Boolean = false) {
+        synchronized(this) {
+            generation++
+            if (sceneChanged) sceneGeneration++
+            if (animationChanged) animationGeneration++
+        }
         notifyListeners()
     }
 

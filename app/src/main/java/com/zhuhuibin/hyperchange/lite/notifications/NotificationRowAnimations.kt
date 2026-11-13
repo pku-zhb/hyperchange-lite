@@ -82,7 +82,7 @@ internal class NotificationRowAnimations {
     }
 
     private fun eligible(view: View): Boolean = prefs.flag("notification_stack_anim_enabled") &&
-        NotificationScope.role(view) == NotificationRole.ORDINARY && NotificationScope.sceneAllows(view)
+        NotificationScope.role(view) == NotificationRole.ORDINARY && NotificationScope.animationAllows(view)
 
     private fun write(view: View, scale: Float, alpha: Float) {
         setValue.invoke(scaleX, view, scale)
@@ -148,13 +148,13 @@ internal class NotificationRowAnimations {
         onEnd: Runnable?, private val external: AnimatorListenerAdapter?,
     ) : View.OnAttachStateChangeListener {
         val blur = SurfaceBlur(view) { runtime.log(it) }
-        private val token = NotificationScope.token(view)
+        private val token = NotificationScope.animationToken(view)
         private val revision = configurationRevision
         private val owned = baseline.map { OwnedValue(it) }
         private var finished = false
         fun scheduleUpdate() { update.invoke(updateOwner) }
         fun record(index: Int, value: Float) { owned[index].record(value) }
-        fun stale() = revision != configurationRevision || !NotificationScope.isCurrent(view, token)
+        fun stale() = revision != configurationRevision || !NotificationScope.isAnimationCurrent(view, token)
         fun valid() = !finished && eligible(view) && !finished && !stale()
         var committed = false
         var animator: ValueAnimator? = null

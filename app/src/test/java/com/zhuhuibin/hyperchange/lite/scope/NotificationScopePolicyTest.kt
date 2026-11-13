@@ -7,6 +7,34 @@ import org.junit.Test
 class NotificationScopePolicyTest {
     private val unlocked = NotificationScene(false, false, false, 0)
 
+    @Test fun animationsRequireTheirOwnOptInOnSettledLitKeyguard() {
+        val locked = NotificationScene(true, false, false, 1)
+        assertFalse(NotificationScopePolicy.animationAllows(false, locked))
+        assertTrue(NotificationScopePolicy.animationAllows(true, locked))
+        assertTrue(NotificationScopePolicy.animationAllows(true, locked.copy(statusBarState = 2)))
+        assertTrue(NotificationScopePolicy.animationAllows(false, unlocked))
+        assertTrue(NotificationScopePolicy.animationAllows(true, unlocked))
+    }
+
+    @Test fun animationOptInNeverAdmitsAodUnknownOrTransitioningScenes() {
+        val locked = NotificationScene(true, false, false, 1)
+        for (scene in listOf(NotificationScene(), locked.copy(dozing = true), locked.copy(dozing = null),
+            locked.copy(transitioning = true), locked.copy(transitioning = null),
+            locked.copy(showing = null), locked.copy(statusBarState = null), locked.copy(statusBarState = 0))) {
+            assertFalse("Unsettled animation scene $scene", NotificationScopePolicy.animationAllows(true, scene))
+            assertFalse(NotificationScopePolicy.animationAllows(false, scene))
+        }
+    }
+
+    @Test fun materialPermissionDoesNotAuthorizeAnyAnimationRole() {
+        val locked = NotificationScene(true, false, false, 1)
+        for (role in NotificationRole.entries) {
+            assertTrue(NotificationScopePolicy.allows(role, true, locked))
+            assertFalse(NotificationScopePolicy.animationAllows(false, locked))
+            assertFalse(NotificationScopePolicy.animationAllows(true, locked.copy(dozing = true)))
+        }
+    }
+
     @Test fun ordinaryNotificationsRequireEveryUnlockedSignalWhenScopeIsOff() {
         assertTrue(NotificationScopePolicy.allows(NotificationRole.ORDINARY, false, unlocked))
         for (scene in listOf(

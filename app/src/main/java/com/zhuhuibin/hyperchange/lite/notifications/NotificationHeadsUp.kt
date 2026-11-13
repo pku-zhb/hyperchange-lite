@@ -33,7 +33,7 @@ internal class NotificationHeadsUp {
                     val layout = chain.thisObject?.read("mView")
                     val expanded = layout?.call("getIsExpanded") == true || layout?.read("mWillExpand") == true
                     if (row != null) {
-                        if (expanded || !prefs.flag("notification_heads_up_pop_enabled")) sessions.remove(row)?.finish(true)
+                        if (expanded || !prefs.flag("notification_heads_up_pop_enabled") || !NotificationScope.animationAllows(row)) sessions.remove(row)?.finish(true)
                         else runCatching { start(row, chain.getArg(1) == true) }.onFailure {
                             sessions.remove(row)?.finish(true)
                             throw it
@@ -148,10 +148,10 @@ internal class NotificationHeadsUp {
     private inner class Session(private val view: View, private val channel: Channel) : View.OnAttachStateChangeListener {
         val animators = mutableListOf<ValueAnimator>()
         val blur = SurfaceBlur(view, minUpdateIntervalMs = 16L) { runtime.log(it) }
-        private val token = NotificationScope.token(view, ordinaryScene = false)
+        private val token = NotificationScope.animationToken(view)
         private val revision = configurationRevision
         private var finished = false
-        fun stale() = revision != configurationRevision || !NotificationScope.isCurrent(view, token, ordinaryScene = false)
+        fun stale() = revision != configurationRevision || !NotificationScope.isAnimationCurrent(view, token)
         fun valid() = !finished && !stale() && prefs.flag("notification_heads_up_pop_enabled")
         private var outstanding = 3
         private var cancelled = false

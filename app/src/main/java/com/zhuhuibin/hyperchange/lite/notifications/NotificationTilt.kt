@@ -104,12 +104,12 @@ internal class NotificationTilt {
     }
 
     private fun eligible(view: View, media: Boolean): Boolean =
-        NotificationScope.sceneAllows(view) && prefs.flag("notification_press_tilt_enabled") &&
+        NotificationScope.animationAllows(view) && prefs.flag("notification_press_tilt_enabled") &&
             prefs.flag(if (media) "notification_press_tilt_media_enabled" else "notification_press_tilt_row_enabled", true)
 
     private inner class Session(view: View, private val media: Boolean) : View.OnAttachStateChangeListener {
         private val target = WeakReference(view)
-        private val token = NotificationScope.token(view)
+        private val token = NotificationScope.animationToken(view)
         private val revision = configurationRevision
         private var closed = false
         private val ownership = mutableMapOf<String, OwnedValue<Float>>()
@@ -165,7 +165,7 @@ internal class NotificationTilt {
             }
         }
 
-        fun stale(): Boolean = revision != configurationRevision || target.get()?.let { !NotificationScope.isCurrent(it, token) } != false
+        fun stale(): Boolean = revision != configurationRevision || target.get()?.let { !NotificationScope.isAnimationCurrent(it, token) } != false
         fun valid(): Boolean = !closed && target.get()?.let { eligible(it, media) && !closed && !stale() } == true
 
         fun rebase(name: String, value: Float) { ownership[name]?.rebase(value) }
