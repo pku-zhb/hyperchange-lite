@@ -53,6 +53,12 @@ def main():
     parser.add_argument("--archive-dir", type=Path, default=DEFAULT_ARCHIVE)
     args = parser.parse_args()
     source = args.apk.expanduser().resolve(strict=True)
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT, text=True).strip()
+    if subprocess.check_output(["git", "status", "--porcelain"], cwd=PROJECT, text=True).strip():
+        raise ValueError("Commit and push the source before archiving a delivery.")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", commit, "refs/remotes/origin/main"],
+                      cwd=PROJECT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+        raise ValueError("The delivery source is not recorded on origin/main. Push and verify it first.")
     archive = args.archive_dir.expanduser()
     if not archive.is_dir():
         raise ValueError(f"Existing personal archive is unavailable: {archive}")
@@ -83,9 +89,16 @@ def main():
     code = int(package["versionCode"])
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,70}", version) or code < 1:
         raise ValueError("Invalid archive version.")
+    manifest = subprocess.check_output(
+        [str(build_tools / "aapt2"), "dump", "xmltree", str(source), "--file", "AndroidManifest.xml"], text=True)
+    metadata = re.search(
+        r'com\.zhuhuibin\.hyperchange\.lite\.SOURCE_REVISION[^\n]*\n[^\n]*android:value[^\n]*"([0-9a-f]{40})"',
+        manifest)
+    if not metadata or metadata.group(1) != commit:
+        raise ValueError("APK embedded source revision differs from the committed delivery source.")
 
     checksum = digest(source)
-    filename = f"hyperchange-lite-{version}.apk"
+    filename = f"hyperchange-lite-{version}-{commit[:12]}.apk"
     local = PROJECT / "releases/local"
     local.mkdir(parents=True, exist_ok=True)
     retained, delivered = local / filename, archive / filename
@@ -112,11 +125,11 @@ def main():
     # Import the retained, versioned file under its original filename; no vault rename.
     copy_once(retained, delivered, checksum)
     if not receipt.exists():
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT, text=True).strip()
         record = dict(version=version, version_code=code, package=package["name"],
                       apk_sha256=checksum, certificate_sha256=certificate,
                       debuggable="application-debuggable" in badging,
-                      archived_from_commit=commit, archived_at=datetime.now(timezone.utc).isoformat())
+                      archived_from_commit=commit, release_name=commit, source_dirty=False,
+                      archived_at=datetime.now(timezone.utc).isoformat())
         with receipt.open("x") as target:
             json.dump(record, target, indent=2)
             target.write("\n")

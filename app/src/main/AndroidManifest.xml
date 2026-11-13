@@ -5,6 +5,8 @@
         android:enableOnBackInvokedCallback="true" android:icon="@drawable/ic_launcher"
         android:label="@string/app_name" android:theme="@style/Theme.HyperChangeLite"
         android:supportsRtl="true">
+        <meta-data android:name="com.zhuhuibin.hyperchange.lite.SOURCE_REVISION"
+            android:value="${liteSourceRevision}" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

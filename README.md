@@ -34,6 +34,14 @@ contrast test background. Native-versus-schematic preview status is explicit;
 existing bound notifications can refresh on first tuning enable without waiting
 for a later OEM update. See [material comparisons](design/MATERIAL_PRESETS.md).
 
+
+Preview 6 integrates the unified material editor and a usability/behavior review:
+clearer task sections and dependency hints, smaller slider windows with one-step
+and exact input, thin-volume companion-button handling, accurate disabled-effect
+previews, and corrected overdamping. Existing values and scopes are preserved.
+See [Preview 6 review](design/PREVIEW6_REVIEW.md). The normal-notification sample
+is a local preview, not a guarantee of identical rendering for every OEM scene.
+
 ## Build
 
 Requires JDK 21+, Android SDK/build tools 37 and libxposed API 102.
@@ -52,7 +60,8 @@ outputs while retaining the shared downloaded Gradle dependencies.
 
 Before delivering a preview in the maintainer environment, run
 `python3 tools/archive-preview.py`. It checks the APK identity and signature,
-retains a versioned copy under `releases/local/`, and imports an identical copy
+requires a clean source revision already pushed to main, checks the embedded
+source identity, retains a versioned/hash-named copy under `releases/local/`, and imports an identical copy
 into the owner's existing `02 Personal Files/Miduo` archive. Different builds
 cannot replace an archived version. Receipts remain local to the project.
 
