@@ -9,7 +9,7 @@ corners, notification animations and volume behavior. Settings owns App theme,
 language, import/export and full reset. About owns version, fork, issue tracker,
 upstream and license links. Import/export are not feature-page actions.
 
-Feature editors use one layout at every window width:
+Adjustment editors use one layout at every window width:
 
 ```text
 App bar
@@ -23,7 +23,8 @@ or separate scene picker. Each setting has one title; compatibility is a short
 title marker. Numeric controls use reduced vertical padding and 44 dp operation
 regions, retaining exact numeric entry and validation dialogs.
 
-Scopes are a separate Home destination. Material tabs separate glass appearance,
+Scopes are a separate Home destination with controls only: no rendered sample
+or preview allocation. Material tabs separate glass appearance,
 card sampling, full-screen background and card presets. Corner tabs separate
 notification, control-center and volume radii. Legacy-only settings never become
 visible merely because they appear in an imported backup.

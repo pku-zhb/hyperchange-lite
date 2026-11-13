@@ -96,3 +96,10 @@ Notification grouping/fold-history behavior is suspended at the owner's request.
 Keep its keys only for backup compatibility; do not expose controls, install hooks
 or resume compatibility work without a new request. Retired group code lives only
 in the ignored local archive, with the suspected MiDuo Noti interaction recorded.
+
+## Latest owner delivery preferences
+
+Archive APKs locally and copy to the reachable phone Download directory. Do not
+send APK attachments through cc-connect. Do not create Markdown notes in the
+personal Miduo archive; put requested reading/acceptance documents in 00 Temp.
+Phone installation and scope reload require current explicit owner authorization.

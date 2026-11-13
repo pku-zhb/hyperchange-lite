@@ -174,8 +174,8 @@ private fun FeaturePage(
     BoxWithConstraints(modifier) {
         val previewHeight = (maxHeight.value * .28f).coerceIn(64f, 180f).toInt()
         Column(Modifier.fillMaxSize()) {
-            PreviewPanel(repository, revision, target, night, wallpaperUri, wallpaperStyle,
-                previewHeight,
+            if (feature != Feature.SCOPES) PreviewPanel(
+                repository, revision, target, night, wallpaperUri, wallpaperStyle, previewHeight,
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp))
             if (projects.size > 1) ProjectTabs(projects.map { uiText(it.second) }, index, { selected ->
                 if (selected != index) {

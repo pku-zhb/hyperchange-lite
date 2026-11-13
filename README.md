@@ -4,6 +4,14 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.5 removes generated-view-ID exception storms, coalesces slider writes,
+reads each material snapshot once, and keeps the current volume shape through its
+native dismiss animation. Whole-screen tint adjusts mode 106 while preserving
+structural/unknown blend modes; zero extra zoom retains its native meaning.
+Scopes no longer show an unrelated preview. Launcher art directly identifies the
+module's function. See [implementation evidence](design/MATERIAL_PERFORMANCE_015.md).
+Device rendering and cold-entry smoothness remain owner acceptance.
+
 Version 0.1.4 separates card materials from the whole notification/Control Center
 backdrop, including independent values, enable flags, migration and refresh.
 The App now has Home, Settings and About pages, compact peer controls, separate

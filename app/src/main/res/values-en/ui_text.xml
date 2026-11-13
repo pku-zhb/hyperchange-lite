@@ -55,7 +55,7 @@
     <string name="ui_card_sampling_scale">Card sampling scale</string>
     <string name="ui_card_tint_opacity">Card tint opacity</string>
     <string name="ui_full_screen_backdrop_blur">Full-screen backdrop blur</string>
-    <string name="ui_full_screen_sampling_scale">Full-screen sampling scale</string>
+    <string name="ui_full_screen_sampling_scale">Full-screen extra zoom</string>
     <string name="ui_full_screen_tint_opacity">Full-screen tint opacity</string>
     <string name="ui_luminance_blend">Luminance blend</string>
     <string name="ui_material_saturation">Material saturation</string>

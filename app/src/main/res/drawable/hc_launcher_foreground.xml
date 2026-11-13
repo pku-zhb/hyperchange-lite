@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
-<!-- HyperChanger orange device motif (ColdP/HyperChanger), redrawn for Lite; see design/ICON_FAMILY.md. -->
+<!-- Original HC-family function glyph; see design/ICON_FAMILY.md. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FF7700" android:pathData="M45,26H63Q71,26 71,34V74Q71,82 63,82H45Q37,82 37,74V34Q37,26 45,26ZM30,37Q33,37 33,40V68Q33,71 30,71Q27,71 27,68V40Q27,37 30,37ZM78,37Q81,37 81,40V68Q81,71 78,71Q75,71 75,68V40Q75,37 78,37Z" />
-    <path android:fillColor="#FFFDF9" android:pathData="M51,32H57Q58,32 58,33Q58,34 57,34H51Q50,34 50,33Q50,32 51,32ZM51,74H57Q58,74 58,75Q58,76 57,76H51Q50,76 50,75Q50,74 51,74ZM44,43.75H46.73A3.5,3.5 0,0 1,53.27,43.75H64V46.25H53.27A3.5,3.5 0,0 1,46.73,46.25H44ZM44,59.75H55.73A3.5,3.5 0,0 1,62.27,59.75H64V62.25H62.27A3.5,3.5 0,0 1,55.73,62.25H44Z" />
+    <path android:pathData="M37,31H59Q65,31 65,37V59Q65,65 59,65H37Q31,65 31,59V37Q31,31 37,31Z" android:fillColor="#FFFDF9" android:strokeColor="#FFFDF9" android:strokeWidth="3" android:strokeLineJoin="round" android:fillAlpha="0.16" />
+    <path android:pathData="M49,43H71Q77,43 77,49V71Q77,77 71,77H49Q43,77 43,71V49Q43,43 49,43Z" android:fillColor="#FFFDF9" android:strokeColor="#FFFDF9" android:strokeWidth="3" android:strokeLineJoin="round" android:fillAlpha="0.24" />
+    <path android:pathData="M65,29L67.7,35.3L74,38L67.7,40.7L65,47L62.3,40.7L56,38L62.3,35.3Z" android:fillColor="#FFFDF9" />
 </vector>

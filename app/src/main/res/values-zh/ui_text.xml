@@ -55,7 +55,7 @@
     <string name="ui_card_sampling_scale">卡片取样尺度</string>
     <string name="ui_card_tint_opacity">卡片底色浓度</string>
     <string name="ui_full_screen_backdrop_blur">整屏背景模糊</string>
-    <string name="ui_full_screen_sampling_scale">整屏取样尺度</string>
+    <string name="ui_full_screen_sampling_scale">整屏额外缩放</string>
     <string name="ui_full_screen_tint_opacity">整屏背景色浓度</string>
     <string name="ui_luminance_blend">明暗混合</string>
     <string name="ui_material_saturation">材质饱和度</string>

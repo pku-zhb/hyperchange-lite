@@ -72,7 +72,7 @@ internal object UiTextCatalog {
         "卡片取样尺度" to R.string.ui_card_sampling_scale,
         "卡片底色浓度" to R.string.ui_card_tint_opacity,
         "整屏背景模糊" to R.string.ui_full_screen_backdrop_blur,
-        "整屏取样尺度" to R.string.ui_full_screen_sampling_scale,
+        "整屏额外缩放" to R.string.ui_full_screen_sampling_scale,
         "整屏背景色浓度" to R.string.ui_full_screen_tint_opacity,
         "明暗混合" to R.string.ui_luminance_blend,
         "材质饱和度" to R.string.ui_material_saturation,
