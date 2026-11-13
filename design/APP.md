@@ -43,12 +43,19 @@ vertical track, then independent mute and DND pills below it. The narrow phase
 hides companion controls; first-show and subsequent-level events are distinct.
 The preview illustrates an OEM contract without claiming identical device pixels.
 
-App theme supports System/Light/Dark and updates the sample theme. Language uses
+App theme supports System/Light/Dark and their wallpaper-color variants, and
+updates the sample theme. Its own theme page also controls floating navigation
+and App-local blur. Language uses
 Android per-App LocaleManager with System/Simplified Chinese/English; English is
 the fallback. Android resources back both Compose and native View preview text.
 These preferences never enter the SystemUI remote preference group. Full backups
 optionally include App appearance metadata; older backups retain current App
 appearance. Appearance metadata is validated before module preferences are written.
+
+About uses the module's own logo/version, donation and companion-project entry.
+Credits and complete offline AGPL/Apache/NOTICE texts are separate pages. Third-party
+names remain where attribution or a real online API/source requires identification;
+ordinary feature ownership uses generic module descriptions.
 
 Full reset restores all active module values and App appearance; applying or
 undoing a card preset does not touch the independent full-screen background.

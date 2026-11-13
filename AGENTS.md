@@ -99,6 +99,10 @@ Card glass/sampling and full-screen shade background have separate values,
 enable state and refresh requests. Card presets/undo or partial imports must not
 modify the full-screen layer. Preserve the strict real-expanded-panel gate from
 0.1.3; a heads-up-visible window never authorizes whole-screen tuning.
+Ordinary lockscreen material and lockscreen animation permissions are separate.
+The animation opt-in defaults off and requires a settled awake screen; material
+permission alone never authorizes animation on the lockscreen. Preserve current
+native AOD selection and fresh ownership-aware cleanup.
 Notification grouping/fold-history behavior is suspended at the owner's request.
 Keep its keys only for backup compatibility; do not expose controls, install hooks
 or resume compatibility work without a new request. Retired group code lives only

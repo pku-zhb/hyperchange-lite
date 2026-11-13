@@ -4,6 +4,20 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.7 separates lockscreen notification material from default-off
+lockscreen animations. Plain native lockscreen rows can acquire their current
+keyguard glass recipe; settled screen/wake state and current native ownership
+govern acquisition and release. Control-center sliders now cover independent
+track/fill corners and native resource replacements, including fold qualifiers.
+The App adds six theme modes, floating navigation, App-local blur, a complete
+About/credits/offline-licence structure and a companion link. Material slider
+windows include all supplied presets while retaining legal import ranges.
+See [lockscreen scopes](design/LOCKSCREEN_SCOPES.md),
+[slider corners](design/CONTROL_SLIDER_RADIUS.md) and
+[host checks](design/VALIDATION.md). Pull-down background zoom remains
+[unimplemented](design/PULLDOWN_ZOOM.md): the verified candidate scales keyguard
+content, not the requested backdrop. This release uses no device connection.
+
 Version 0.1.6 targets the actual whole-window compositor and native backdrop
 controllers, with independent blur and dimming controls and a full-panel preview.
 Card glass remains separate. Exact current native writers restore owned backdrop

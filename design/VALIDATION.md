@@ -1,5 +1,37 @@
 # Host validation
 
+## 0.1.7 lockscreen scope, slider corners and App appearance
+
+- The full JVM suite passes 302 tests in 52 suites with no failures/errors/skips;
+  Debug lint and `git diff --check` pass. Existing non-blocking platform warnings remain.
+- Material and animation opt-ins are independent. The new animation key defaults
+  false and is excluded from legacy-scope inference/completeness. Tests cover
+  screen/wake/scene transitions, repeated no-op lifecycle calls, ordinary and
+  special roles, animation cleanup and material-only imports.
+- Plain keyguard rows use the current native selector's keyguard/light-wallpaper
+  glass effect and actual Context, guarded by settled Screen ON/AWAKE state.
+  Current source/epoch/write ownership governs clearing; an AOD selector early
+  return does not discard pending responsibility. Existing AOD selection remains
+  native. Source/selected Kotlin integration and focused cases precede the full
+  Android build; they do not prove phone rendering.
+- Slider checks cover independent track/fill baselines, resource replacement,
+  fresh same-value native inputs and restoration across a real 24dp/48dp
+  qualifier transition. Exact retained methods supply lifecycle hooks, without
+  onDraw/touch interception. Runtime defaults now follow the displayed specs.
+- Theme/appearance backup accepts old two-field metadata and six theme modes,
+  navigation and App-local blur. All presets/defaults lie inside their visible
+  slider windows; the legal limits/steps and preset values remain unchanged.
+  Source checks cover localized visible UI, companion links and intact legal
+  assets. Functional pages use generic module descriptions while credit/licence
+  pages preserve attribution; online-service names still identify API sources.
+- No phone connection, GUI, screenshot, install, reload, tuning or reboot is used.
+  The release is built from committed/pushed source and retained with the existing
+  signing identity. Native GPU sampling, lockscreen cleanup, theme/layout comfort
+  and actual slider outlines remain deferred owner acceptance.
+- Pull-down backdrop zoom is not shipped. Tracing the plausible depth/zoom flow
+  to its final consumer showed a keyguard-root transform, not backdrop zoom; no
+  fake preview slider or retired sampling-ratio key is exposed as that feature.
+
 ## 0.1.6 real background channels, readable settings and banner glass
 
 - All 281 JVM tests in 49 suites pass with no failures, errors or skips.
