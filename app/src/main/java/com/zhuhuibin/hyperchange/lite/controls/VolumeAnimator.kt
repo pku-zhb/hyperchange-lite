@@ -17,6 +17,8 @@ internal class VolumeAnimator(
     private val preferences: SharedPreferences,
     private val onPhaseChanged: () -> Unit,
 ) : Runnable {
+    private val ownerReference = WeakReference(owner)
+    private val nativeStateGetter = owner.javaClass.methods.firstOrNull { it.name == "getSs" && it.parameterCount == 0 }
     private val column = WeakReference(readField(owner, "view") as? View)
     private val parts = listOf("slider", "progressView", "progressViewBg").mapNotNull {
         (readField(owner, it) as? View)?.let(::WeakReference)
@@ -45,7 +47,9 @@ internal class VolumeAnimator(
     private val placementCombined = Matrix()
     private val nativeToRoot = Matrix()
     private val trackBounds = RectF()
-    private var interaction = VolumeInteractionState()
+    private val session = VolumePanelSession()
+    private val interaction get() = session.state
+    private var pendingPop = false
     private val width = VolumeSpring(parts.firstOrNull()?.get()?.layoutParams?.width?.toFloat() ?: 0f)
     private val pop = VolumeSpring(1f)
     private val nudge = VolumeSpring(0f)
@@ -65,13 +69,13 @@ internal class VolumeAnimator(
     private var scheduled = false
     private var owns = false
     private val touching get() = interaction.touching
-    val narrow: Boolean get() = owns && interaction.visible && interaction.narrow
+    val narrow: Boolean get() = owns && interaction.visible && interaction.narrow && column.get()?.isShown == true
     private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
         placementDirty = true
-        if (owns) schedule()
+        if (interaction.visible && !owns) refresh() else if (owns) schedule()
     }
     private val attachListener = object : View.OnAttachStateChangeListener {
-        override fun onViewAttachedToWindow(v: View) = Unit
+        override fun onViewAttachedToWindow(v: View) { if (interaction.visible) refresh() }
         override fun onViewDetachedFromWindow(v: View) { restore() }
     }
 
@@ -135,6 +139,7 @@ internal class VolumeAnimator(
             dragX.snap(0f); dragY.snap(0f); stretchX.snap(1f); stretchY.snap(1f)
             readPlacement()
             owns = true
+            if (interaction.narrow) onPhaseChanged()
         }
         return true
     }
@@ -144,20 +149,49 @@ internal class VolumeAnimator(
         readPlacement()
         if (!interaction.visible) return
         if (!acquire()) return
+        startPendingPop()
         targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
     }
 
     fun show() {
-        if (!acquire()) return
-        readPlacement()
+        if (!enabled()) return
         val firstShow = !interaction.visible
-        transition(VolumeInteractionEvent.SHOW)
-        if (firstShow) {
-            pop.snap(0f)
-            val (k, d) = VolumeMotionModel.popCoefficients(number("volume_pop_duration", 1000f), number("volume_pop_damping", 1f))
-            pop.target(1f, k, d)
-        }
-        targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
+        session.show(nativeLevel())
+        if (firstShow) { pendingPop = true; onPhaseChanged() }
+        // Remember show even if native attachment or measured dimensions are not
+        // ready; the attach/layout observer retries without losing the session.
+        refresh()
+    }
+
+    private fun nativeLevel(): Int? {
+        val instance = ownerReference.get() ?: return null
+        // Current OEM VolumeColumn stores ss in a delegated property, not a field.
+        val state = runCatching { nativeStateGetter?.invoke(instance) }.getOrNull() ?: readField(instance, "ss")
+        return (readField(state, "level") as? Number)?.toInt()
+    }
+
+    fun sliderUpdated() {
+        if (column.get()?.isShown != true) return
+        val wasNarrow = interaction.narrow
+        if (!session.sliderUpdate(nativeLevel())) return
+        if (!wasNarrow) onPhaseChanged()
+        refresh()
+        nudge()
+    }
+
+    fun nativeSizeUpdated(index: Int) {
+        if (!owns) return
+        widthBaseline.updateNative(index, parts.getOrNull(index)?.get()?.layoutParams?.width ?: 0)
+        placementDirty = true
+        refresh()
+    }
+
+    private fun startPendingPop() {
+        if (!pendingPop) return
+        pendingPop = false
+        pop.snap(0f)
+        val (k, d) = VolumeMotionModel.popCoefficients(number("volume_pop_duration", 1000f), number("volume_pop_damping", 1f))
+        pop.target(1f, k, d)
     }
 
     fun touch(event: MotionEvent) {
@@ -211,9 +245,9 @@ internal class VolumeAnimator(
     }
 
     private fun transition(event: VolumeInteractionEvent) {
-        val next = VolumeInteractionModel.transition(interaction, event)
-        if (interaction == next) return
-        interaction = next
+        val previous = interaction
+        session.event(event)
+        if (interaction == previous) return
         onPhaseChanged()
     }
 
@@ -316,6 +350,7 @@ internal class VolumeAnimator(
     fun restore() {
         column.get()?.removeCallbacks(this)
         scheduled = false; returnAt = 0L
+        pendingPop = false
         transition(VolumeInteractionEvent.HIDE)
         if (!owns) return
         val originalWidths = widthBaseline.release() ?: return

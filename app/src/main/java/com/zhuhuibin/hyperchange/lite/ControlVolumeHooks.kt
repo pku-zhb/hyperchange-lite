@@ -17,6 +17,7 @@ import com.zhuhuibin.hyperchange.lite.controls.VolumePanelLongPress
 import com.zhuhuibin.hyperchange.lite.controls.VolumePanelAppearance
 import com.zhuhuibin.hyperchange.lite.controls.VolumeButtonVisibility
 import java.lang.reflect.Method
+import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 class ControlVolumeHooks {
@@ -226,14 +227,30 @@ class ControlVolumeHooks {
             }
         }
         runtime.type(prefix + "VolumeColumn")?.let { type ->
+            val nativeSizes = mapOf("setSliderSize" to 0, "setProgressViewSize" to 1, "setProgressViewBgSize" to 2)
+            type.declaredMethods.filter { it.name in nativeSizes && it.parameterCount == 2 }.forEach { method ->
+                runtime.hook(method, "volume-native-size:${method.name}") { chain ->
+                    val result = chain.proceed()
+                    columns[chain.thisObject]?.nativeSizeUpdated(nativeSizes.getValue(method.name))
+                    result
+                }
+            }
+            type.declaredMethods.filter { it.name == "updateSliderRatio" && it.parameterCount == 0 }.forEach { method ->
+                runtime.hook(method, "volume-level-update") { chain ->
+                    val result = chain.proceed()
+                    columns[chain.thisObject]?.sliderUpdated()
+                    result
+                }
+            }
             type.declaredMethods.filter { it.name == "initColumn" }.forEach { method ->
                 runtime.hook(method, "volume-column:${method.parameterCount}") { chain ->
                     // Release old ownership before OEM applies a new folded/rotated layout.
                     columns.remove(chain.thisObject)?.dispose()
                     val result = chain.proceed()
                     chain.thisObject?.let { owner ->
+                        val reference = WeakReference(readField(owner, "view") as? View)
                         columns[owner] = VolumeAnimator(owner, runtime.preferences) {
-                            (readField(owner, "view") as? View)?.let(::panelFor)?.let { updatePanel(it, false) }
+                            reference.get()?.let(::panelFor)?.let { updatePanel(it, false) }
                         }
                     }
                     result

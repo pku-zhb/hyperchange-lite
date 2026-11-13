@@ -44,6 +44,17 @@ class VolumePlacementTest {
         assertFalse(baseline.acquire(listOf(48, 44)))
     }
 
+    @Test fun nativeSizingDuringASessionReplacesOnlyFreshRestoreDimensions() {
+        val baseline = VolumeWidthBaseline()
+        assertTrue(baseline.acquire(listOf(64, 60, 62)))
+        baseline.updateNative(0, 48)
+        baseline.updateNative(2, 46)
+        baseline.updateNative(1, -1)
+        assertEquals(listOf(48, 60, 46), baseline.widths)
+        baseline.updateNative(1, 44)
+        assertEquals(listOf(48, 44, 46), baseline.release())
+    }
+
     @Test fun legacyPhysicalOffsetsMigrateOnceAndNewGapWins() {
         assertEquals(6f, VolumePlacementModel.resolveEdgeGap(null), 0f)
         assertEquals(0f, VolumePlacementModel.resolveEdgeGap(null, -50f), 0f)

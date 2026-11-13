@@ -18,4 +18,11 @@ internal class VolumeWidthBaseline {
         saved = null
         return original
     }
+
+    /** Native set*Size writes are fresh layout inputs, never our animated frame widths. */
+    fun updateNative(index: Int, width: Int) {
+        val previous = saved ?: return
+        if (index !in previous.indices || width <= 0) return
+        saved = previous.toMutableList().also { it[index] = width }
+    }
 }
