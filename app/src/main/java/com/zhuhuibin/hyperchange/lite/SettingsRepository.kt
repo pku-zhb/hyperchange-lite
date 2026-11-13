@@ -14,6 +14,10 @@ import java.util.concurrent.Executors
 const val PREFERENCE_GROUP = "hyperchange_lite"
 private const val GLASS_PRESET_UNDO = "_glass_preset_trial_undo_v1"
 
+/** Local persistence succeeded; callers must not describe the edit as lost. */
+internal class SettingsSyncException(cause: Exception) :
+    IllegalStateException("Settings saved locally; module sync failed", cause)
+
 /** The app owns its settings. Binding never replaces edits made while disconnected. */
 class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     @Volatile internal var service: XposedService? = null
@@ -34,7 +38,9 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     }
 
     override fun onServiceBind(service: XposedService) {
-        main.post {
+        // Binding publishes the full catalog through IPC and durable commits.
+        // Keep it on the same serial queue as edits, never on the App UI thread.
+        settingsExecutor.execute {
             synchronized(settingsLock) {
                 this.service = service
                 runCatching {
@@ -63,7 +69,7 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     }
 
     override fun onServiceDied(service: XposedService) {
-        main.post {
+        settingsExecutor.execute {
             synchronized(settingsLock) { if (this.service === service) this.service = null }
             notifyObservers()
         }
@@ -118,7 +124,8 @@ class SettingsRepository(context: Context) {
     private val observer: () -> Unit = { onChange?.invoke() }
 
     init {
-        synchronized(app.settingsLock) { migrateLocal(preferences) }
+        // Application.onCreate already migrated local state. Do not wait on the
+        // publication lock from Activity creation while background IPC is pending.
         app.observers.add(observer)
     }
 
@@ -186,7 +193,7 @@ class SettingsRepository(context: Context) {
             }
         } catch (error: Exception) {
             app.syncFailed = true
-            throw error
+            throw SettingsSyncException(error)
         } finally { app.notifyObservers() }
     }
 

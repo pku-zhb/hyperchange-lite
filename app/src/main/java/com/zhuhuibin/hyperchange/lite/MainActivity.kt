@@ -44,7 +44,13 @@ class MainActivity : ComponentActivity() {
                 require(bytes.size <= 262_144) { "配置文件过大" }
                 repository.importJson(bytes.toString(Charsets.UTF_8))
             }
-            report(result.fold({ "已导入 $it 项设置" }, { "导入失败：${it.message}" }))
+            result.fold({ report("已导入 $it 项设置") }, { error ->
+                if (error is SettingsSyncException) reportSettingsFailure("导入", error)
+                else {
+                    android.util.Log.w("HyperChangeLite", "Configuration import failed", error)
+                    report("导入失败，请检查配置文件和本机存储后重试。")
+                }
+            })
         }
     }
     private val backgroundPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -68,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 repository = repository, revision = revision,
                 onWrite = { spec, value -> io.execute {
                     runCatching { repository.set(spec, value) }
-                        .onFailure { report("保存或同步失败：${it.message}") }
+                        .onFailure { reportSettingsFailure("保存", it) }
                 } },
                 onExport = {
                     io.execute {
@@ -84,17 +90,17 @@ class MainActivity : ComponentActivity() {
                 onImport = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
                 onReset = { io.execute {
                     runCatching { repository.reset() }.fold(
-                        { report("已恢复默认配置") }, { report("恢复失败：${it.message}") })
+                        { report("已恢复默认配置") }, { reportSettingsFailure("恢复", it) })
                 } },
                 onApplyGlassPreset = { preset -> io.execute {
                     runCatching { repository.applyGlassPreset(preset) }.fold(
-                        { report("已应用${preset.title}；柔光调节已开启，作用范围保留") },
-                        { report("预设保存或同步失败：${it.message}") })
+                        { report("已应用${preset.title}；系统材质调节已开启，作用范围保留") },
+                        { reportSettingsFailure("应用材质预设", it) })
                 } },
                 onRestoreGlassPreset = { io.execute {
                     runCatching { repository.restoreBeforeGlassPresets() }.fold(
                         { report("已还原试用前的材质参数") },
-                        { report("还原或同步失败：${it.message}") })
+                        { reportSettingsFailure("还原", it) })
                 } },
                 wallpaperUri = wallpaperUri, wallpaperStyle = wallpaperStyle,
                 onChooseImage = { backgroundPicker.launch(arrayOf("image/*")) },
@@ -118,5 +124,12 @@ class MainActivity : ComponentActivity() {
 
     private fun report(message: String) = runOnUiThread {
         if (!isDestroyed) Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun reportSettingsFailure(action: String, error: Throwable) {
+        android.util.Log.w("HyperChangeLite", "$action failed", error)
+        report(if (error is SettingsSyncException)
+            "已保存在本机，暂未同步到模块。重新连接后会重试。"
+        else "$action 失败，请重试。")
     }
 }
