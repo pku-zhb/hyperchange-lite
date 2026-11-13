@@ -25,7 +25,8 @@ internal fun previewBehavior(values: Map<String, *>): PreviewBehavior {
         mediaTilt = tilt && flag("notification_press_tilt_media_enabled", true),
         headsUp = flag("notification_heads_up_pop_enabled"),
         stack = flag("notification_stack_anim_enabled"),
-        group = flag("notification_group_stack_enabled"),
+        // Suspended together with runtime grouping, even if an older backup enabled it.
+        group = false,
         volume = flag("volume_motion_enabled"),
     )
 }

@@ -34,4 +34,10 @@ class PreviewBehaviorTest {
         assertFalse(state.group)
         assertFalse(state.tiltFor("NOTIFICATION"))
     }
+    @Test fun suspendedGroupingCannotBeReenabledByAnOldBackup() {
+        val state = previewBehavior(mapOf("notification_group_stack_enabled" to true,
+            "notification_disable_fold_history_enabled" to true))
+        assertFalse(state.group)
+    }
+
 }
