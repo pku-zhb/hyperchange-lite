@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package com.zhuhuibin.hyperchange.lite
 
+import com.zhuhuibin.hyperchange.lite.ui.EditorItem
+import com.zhuhuibin.hyperchange.lite.ui.editorItems
+import com.zhuhuibin.hyperchange.lite.ui.settingDisabledReason
 import com.zhuhuibin.hyperchange.lite.ui.Feature
 import com.zhuhuibin.hyperchange.lite.ui.MaterialCategory
 import com.zhuhuibin.hyperchange.lite.ui.UiTextCatalog
@@ -60,6 +63,60 @@ class UiTextCatalogTest {
         }
         val reportLiteral = Regex("(?:report|reportSettingsFailure)\\(\"([^\"\\n]*)\"")
         reportLiteral.findAll(File(source, "MainActivity.kt").readText()).forEach { assertCovered(it.groupValues[1]) }
+    }
+
+    @Test fun structuredEditorGroupTitlesAndNotesHaveResources() {
+        fun cover(items: List<EditorItem>) {
+            items.forEach { item -> when (item) {
+                is EditorItem.Group -> {
+                    if (item.title.isNotBlank()) assertCovered(item.title)
+                    cover(item.children)
+                }
+                is EditorItem.Note -> assertCovered(item.text)
+                is EditorItem.Setting -> assertTrue("Unknown mirrored key: ${item.key}",
+                    LiteCatalog.entries.any { it.key == item.key })
+            } }
+        }
+        MaterialCategory.entries.forEach { category ->
+            cover(editorItems(category, category.settings.filter { it.key !in DeferredSettings.hiddenKeys }))
+        }
+        Feature.entries.forEach { feature ->
+            feature.visibleSettings.groupBy { it.group }.values.forEach { cover(editorItems(null, it)) }
+        }
+    }
+
+    @Test fun dependencyTemplatesAndTheirDynamicTitlesHaveResources() {
+        val toggles = LiteCatalog.entries.filter { it.isToggle }.map { it.key }
+        val allOn = toggles.associateWith { true }
+        val allOff = toggles.associateWith { false }
+        val states = listOf(emptyMap(), allOn, allOff) +
+            toggles.map { allOn + (it to false) } + toggles.map { allOff + (it to true) }
+        val seen = mutableSetOf<String>()
+        states.forEach { state ->
+            LiteCatalog.entries.filter { it.key !in DeferredSettings.hiddenKeys }.forEach { setting ->
+                settingDisabledReason(setting, state) { text ->
+                    seen += text
+                    assertCovered(text)
+                    text
+                }
+            }
+        }
+        assertTrue(seen.contains("需先开启“%s”（原数值已保留）"))
+        assertTrue(seen.contains("需先关闭“%s”（原数值已保留）"))
+    }
+
+    @Test fun currentStructuredUiLiteralsHaveResources() {
+        val quoted = Regex("\"((?:[^\"\\\\]|\\\\.)*)\"")
+        val paths = listOf("ui/LiteApp.kt", "ui/AppPages.kt", "ui/GlassPresetControls.kt",
+            "ui/SettingEditorPlan.kt", "ui/SettingPresentation.kt")
+        paths.forEach { path ->
+            quoted.findAll(File(source, path).readText()).forEach { match ->
+                val raw = match.groupValues[1]
+                if ('$' in raw || '\n' in raw) return@forEach
+                val text = JSONArray("[\"$raw\"]").getString(0)
+                if (han.containsMatchIn(text)) assertCovered(text)
+            }
+        }
     }
 
     @Test fun englishFallbackAndChineseHaveTheSameCompleteResourceSet() {

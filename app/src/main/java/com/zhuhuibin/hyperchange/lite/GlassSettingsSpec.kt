@@ -6,12 +6,12 @@ import com.zhuhuibin.hyperchange.lite.glass.softGlassParameters
 object GlassSettingsSpec {
     val entries: List<LiteSetting> = buildList {
         add(LiteSetting.toggle("glass_enabled", "卡片材质调节", "柔光玻璃", summary = "调节已开启范围内的卡片；下拉背景有独立开关"))
-        add(LiteSetting.toggle("glass_notifications", "通知栏普通通知", "柔光范围", true, summary = "锁屏通知需另外开启“锁屏通知材质与动画”"))
+        add(LiteSetting.toggle("glass_notifications", "通知栏普通通知", "柔光范围", true, summary = "含顶部横幅；锁屏需另开“锁屏通知材质与动画”"))
         add(LiteSetting.toggle(SettingsMigration.MEDIA_KEY, "音乐卡片材质", "柔光范围", summary = "注意兼容：使用 HMC 自定义播放器背景时关闭"))
         add(LiteSetting.toggle("glass_control_center", "控制中心卡片与磁贴", "柔光范围", true))
         add(LiteSetting.toggle("glass_volume", "侧边音量条与展开面板", "柔光范围", true))
         add(LiteSetting.toggle("glass_shade", "下拉背景", "柔光范围", true))
-        add(LiteSetting.toggle("glass_shade_enabled", "调节下拉背景", "整屏背景", summary = "仅在通知中心或控制中心展开时生效；不受卡片预设影响"))
+        add(LiteSetting.toggle("glass_shade_enabled", "调节下拉背景", "整屏背景", summary = "独立开关，仅调解锁后的下拉背景；锁屏与顶部横幅不变"))
         add(LiteSetting.toggle("glass_unify_notifications", "实时卡片与音乐沿用通知材质", "柔光范围", summary = "独立于卡片调节开关；仍遵守各自范围，不改变顶部横幅"))
         add(LiteSetting.number("glass_refraction_blur", "玻璃表层模糊", "柔光玻璃", 100f, 0f, 200f, summary = "100% 为系统原样；调低更清晰，调高更磨砂"))
         add(LiteSetting.number("glass_background_blur", "卡片背后模糊", "卡片取样", 100f, 0f, 200f, summary = "100% 为系统原样；只改卡片背后的模糊，不改整片下拉背景"))
