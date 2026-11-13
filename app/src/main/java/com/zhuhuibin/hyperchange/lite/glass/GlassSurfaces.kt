@@ -15,6 +15,7 @@ internal object GlassSurfaces {
     private val mediaRoots = WeakHashMap<View, Boolean>()
     private val roleAccessors = SurfaceRoleAccessors()
     private val decisions = MaterialCallMemo<View, Facts, Long>()
+    private val resourceNames = ResourceNameCache<android.content.res.Resources>()
 
     /** Only for synchronous pure preparation. Never wrap native setters or queued work. */
     fun <T> withFacts(action: () -> T): T = decisions.within(action)
@@ -63,21 +64,23 @@ internal object GlassSurfaces {
     fun focus(view: View): Boolean = facts(view)?.focus ?: focusNow(view)
     fun materialRoot(view: View): View = facts(view)?.root ?: materialRootNow(view)
 
-    private fun idNow(view: View): String = if (view.id == View.NO_ID || view.id == 0) "" else
-        runCatching { view.resources.getResourceEntryName(view.id) }.getOrDefault("")
+    private fun idNow(view: View): String = resourceNames.name(view.resources, view.id) {
+        view.resources.getResourceEntryName(it)
+    }
 
     fun lineage(view: View): Sequence<View> = generateSequence(view) { it.parent as? View }
 
     /** Unknown or module-owned views fail closed even inside a vendor material call. */
     private fun excludedNow(view: View): Boolean = lineage(view).any { candidate ->
         val name = candidate.javaClass.name
-        val resource = id(candidate)
         name.startsWith("com.zhuhuibin.") || name.startsWith("btm.m.") ||
             name.contains("dynamicisland", true) || name.contains("mediaisland", true) ||
             name.contains("TimeView") || name.contains("clock", true) ||
             name.contains("MiuiKeyguardClock") || name.contains("NumPadKey") ||
-            resource in setOf("time_group", "clock", "clock_view", "keyguard_clock", "date_view")
+            id(candidate) in excludedIds
     }
+
+    private val excludedIds = setOf("time_group", "clock", "clock_view", "keyguard_clock", "date_view")
 
     private fun classifyNow(view: View): GlassSurface? {
         if (excluded(view)) return null

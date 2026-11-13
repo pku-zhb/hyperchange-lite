@@ -1086,7 +1086,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         override fun onDraw(canvas: Canvas) {
             val save = canvas.save()
             if (fallbackSampling) {
-                val zoom = 2f - fallbackScale.coerceIn(0, 200) / 200f
+                val zoom = previewExtraZoom(fallbackScale)
                 canvas.scale(zoom, zoom, width * .5f, height * .5f)
             }
             val bitmap = image

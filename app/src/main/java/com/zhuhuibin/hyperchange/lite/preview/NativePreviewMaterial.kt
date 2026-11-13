@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.graphics.Point
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.SettingsMigration
+import com.zhuhuibin.hyperchange.lite.glass.shadeBlendColor
 import com.zhuhuibin.hyperchange.lite.glass.SoftGlassSettings
 import com.zhuhuibin.hyperchange.lite.glass.shadeGlassSettings
 import com.zhuhuibin.hyperchange.lite.glass.softGlassBlur
@@ -69,6 +70,9 @@ internal fun previewMaterialState(
     }
     return PreviewMaterialState(settings, status, note)
 }
+
+/** Schematic fallback follows the OEM extra-zoom direction, using the local sample baseline. */
+internal fun previewExtraZoom(percent: Int): Float = 1f + softGlassScale(.075f, percent)
 
 internal data class PreviewSamplingInputs(
     val backgroundBlur: Int, val backgroundScale: Float, val opacity: Int,
@@ -164,7 +168,7 @@ internal class NativePreviewMaterial(private val context: Context) {
             invoke(view, "setMiBackgroundBlurRadius", inputs.backgroundBlur)
             invoke(view, "setMiBackgroundBlurScaleRatio", inputs.backgroundScale)
             invoke(view, "setMiBackgroundBlendColors", ArrayList(colors.map {
-                Point(softGlassColorAlpha(it.x, inputs.opacity), it.y)
+                Point(shadeBlendColor(it.x, it.y, inputs.opacity), it.y)
             }))
             view.invalidate()
             true

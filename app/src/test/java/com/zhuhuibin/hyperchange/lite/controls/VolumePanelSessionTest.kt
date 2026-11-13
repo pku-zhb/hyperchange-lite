@@ -5,6 +5,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VolumePanelSessionTest {
+    @org.junit.Test fun dismissRetainsTheNarrowPoseUntilNativeHide() {
+        val session = VolumePanelSession()
+        session.show(5)
+        session.sliderUpdate(6)
+        session.dismiss()
+        org.junit.Assert.assertTrue(session.dismissing)
+        org.junit.Assert.assertTrue(session.state.visible)
+        org.junit.Assert.assertTrue(session.state.narrow)
+        org.junit.Assert.assertFalse(session.sliderUpdate(7))
+        session.event(VolumeInteractionEvent.HIDE)
+        org.junit.Assert.assertFalse(session.state.visible)
+        org.junit.Assert.assertFalse(session.dismissing)
+    }
+
+    @org.junit.Test fun aShowInterruptingDismissStartsWideWithANewLevelSeed() {
+        val session = VolumePanelSession()
+        session.show(5)
+        session.sliderUpdate(6)
+        session.dismiss()
+        session.show(9)
+        org.junit.Assert.assertFalse(session.dismissing)
+        org.junit.Assert.assertFalse(session.state.narrow)
+        org.junit.Assert.assertFalse(session.sliderUpdate(9))
+        org.junit.Assert.assertTrue(session.sliderUpdate(10))
+    }
     @Test fun ordinaryLevelChangeNarrowsWithoutAnEndpointKeyAnimation() {
         val session = VolumePanelSession()
         session.show(5)

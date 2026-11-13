@@ -20,12 +20,13 @@ import java.util.Locale
 /** The Activity owns document pickers and serial IO; screens never restart system scopes. */
 class MainActivity : ComponentActivity() {
     private lateinit var repository: SettingsRepository
-    private val io by lazy { (application as LiteApplication).settingsExecutor }
+    private val io by lazy { (application as LiteApplication).settingsQueue }
     private var revision by mutableIntStateOf(0)
     private var appUi by mutableStateOf(AppUiSettings())
     private var wallpaperUri by mutableStateOf<String?>(null)
     private var wallpaperStyle by mutableIntStateOf(0)
     private var pendingExport = ""
+    private var stopAppUiObservation: (() -> Unit)? = null
 
     private val exporter = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri ?: return@registerForActivityResult
@@ -79,6 +80,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         repository = SettingsRepository(this)
+        stopAppUiObservation = AppUiPreferences.observe(applicationContext) {
+            runOnUiThread { if (!isDestroyed) appUi = AppUiPreferences.load(this) }
+        }
         appUi = AppUiPreferences.load(this)
         pendingExport = savedInstanceState?.getString("pending_export").orEmpty()
         val preview = getSharedPreferences("preview_ui", MODE_PRIVATE)
@@ -101,12 +105,12 @@ class MainActivity : ComponentActivity() {
                         report("语言切换失败，请重试。")
                     }
                 },
-                onWrite = { spec, value -> io.execute {
+                onWrite = { spec, value -> io.update(spec.key) {
                     runCatching { repository.set(spec, value) }
                         .onFailure { reportSettingsFailure("保存", it) }
                 } },
                 onExport = {
-                    val appearance = appUi
+                    val appearance = AppUiPreferences.load(this)
                     io.execute {
                         val result = runCatching {
                             JSONObject(repository.exportJson()).put("appUi", AppUiSettingsCodec.encode(appearance)).toString(2)
@@ -157,6 +161,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        stopAppUiObservation?.invoke()
+        stopAppUiObservation = null
         if (::repository.isInitialized) repository.close()
         super.onDestroy()
     }

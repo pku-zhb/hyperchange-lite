@@ -3,6 +3,7 @@ package com.zhuhuibin.hyperchange.lite
 
 import android.app.LocaleManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.LocaleList
 import org.json.JSONObject
 
@@ -12,6 +13,16 @@ data class AppUiSettings(val themeMode: Int = 0, val language: String = "system"
 object AppUiPreferences {
     private const val GROUP = "app_ui"
     private val languages = setOf("system", "zh-CN", "en")
+
+    /** A recreated Activity observes imports/reset jobs started by its predecessor. */
+    fun observe(context: Context, changed: () -> Unit): () -> Unit {
+        val preferences = context.getSharedPreferences(GROUP, Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key == "theme_mode" || key == "language") changed()
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        return { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     fun load(context: Context): AppUiSettings {
         val prefs = context.getSharedPreferences(GROUP, Context.MODE_PRIVATE)

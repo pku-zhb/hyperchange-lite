@@ -286,7 +286,10 @@ class ControlVolumeHooks {
         }?.forEach { method ->
             runtime.hook(method, "volume-motion:${method.name}:${method.parameterCount}") { chain ->
                 val affected = columns.values.toList().filter { it.belongsToMotion(chain.thisObject) }
-                if (method.name in setOf("dismissVolumePanelAnimation", "expandVolumePanelAnimation")) affected.forEach { it.restore() }
+                when (method.name) {
+                    "dismissVolumePanelAnimation" -> affected.forEach { it.dismiss() }
+                    "expandVolumePanelAnimation" -> affected.forEach { it.restore() }
+                }
                 val result = chain.proceed()
                 affected.forEach { animator -> when (method.name) {
                     "showVolumePanelAnimation" -> animator.show()

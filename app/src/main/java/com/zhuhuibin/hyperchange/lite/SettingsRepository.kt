@@ -24,6 +24,9 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     @Volatile internal var syncFailed = false
     internal val settingsLock = Any()
     internal val settingsExecutor = Executors.newSingleThreadExecutor()
+    internal val settingsQueue = LatestSettingsQueue<String>(settingsExecutor) {
+        android.util.Log.w("HyperChangeLite", "Settings queue action failed", it)
+    }
     internal val observers = mutableSetOf<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
 
@@ -40,7 +43,7 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     override fun onServiceBind(service: XposedService) {
         // Binding publishes the full catalog through IPC and durable commits.
         // Keep it on the same serial queue as edits, never on the App UI thread.
-        settingsExecutor.execute {
+        settingsQueue.execute {
             synchronized(settingsLock) {
                 this.service = service
                 runCatching {
@@ -69,7 +72,7 @@ class LiteApplication : Application(), XposedServiceHelper.OnServiceListener {
     }
 
     override fun onServiceDied(service: XposedService) {
-        settingsExecutor.execute {
+        settingsQueue.execute {
             synchronized(settingsLock) { if (this.service === service) this.service = null }
             notifyObservers()
         }
@@ -140,6 +143,13 @@ class SettingsRepository(context: Context) {
 
     fun set(spec: LiteSetting, value: Any) = synchronized(app.settingsLock) {
         val valid = spec.validate(value)
+        if (canSkipSettingsEdit(preferences.getBoolean("_initialized", false),
+                preferences.contains(spec.key), preferences.all[spec.key], valid)) {
+            // A same-value final slider event need not publish the catalog again. An earlier
+            // failed delivery still needs its normal retry, even though local storage matches.
+            if (app.syncFailed) sync()
+            return@synchronized
+        }
         val edit = preferences.edit().putBoolean("_initialized", true)
             .markMigrations()
         put(edit, spec, valid)
@@ -265,3 +275,7 @@ object SettingsCodec {
         }
     }
 }
+
+/** A fresh default equal to an explicit edit still needs to claim local ownership before binding. */
+internal fun canSkipSettingsEdit(initialized: Boolean, hasValue: Boolean, stored: Any?, requested: Any): Boolean =
+    initialized && hasValue && stored == requested

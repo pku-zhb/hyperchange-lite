@@ -239,10 +239,12 @@ internal class ViewMaterialEngine(
             )
             "setMiBackgroundBlurRadius" -> arrayOf(if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.backgroundBlur) else baseline[0])
             "setMiBackgroundBlurScaleRatio" -> arrayOf(if (settings.enabled) softGlassScale(baseline[0] as Float, settings.backgroundScale) else baseline[0])
-            "setMiBackgroundBlendColors" -> arrayOf(points(unifiedBlends(view) ?: baseline[0], opacity(view, settings)))
+            "setMiBackgroundBlendColors" -> arrayOf(if (isBackdrop(view))
+                shadePoints(baseline[0], if (settings.enabled) settings.backgroundOpacity else 100)
+                else points(unifiedBlends(view) ?: baseline[0], opacity(view, settings)))
             "setMiSelfBlur" -> arrayOf(
                 if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.backgroundBlur) else baseline[0],
-                points(baseline[1], if (settings.enabled) settings.backgroundOpacity else 100),
+                shadePoints(baseline[1], if (settings.enabled) settings.backgroundOpacity else 100),
             )
             "setBackgroundColor" -> arrayOf(if (settings.enabled) softGlassColorAlpha(baseline[0] as Int, settings.backgroundOpacity) else baseline[0])
             else -> baseline
@@ -295,7 +297,9 @@ internal class ViewMaterialEngine(
                         if (scene != null) scopeTokens[view] = scene.token
                     }
                     val settings = settingsFor(view)
-                    val tuned = softGlassColorAlpha(color, opacity(view, settings))
+                    val tuned = if (isBackdrop(view)) shadeBlendColor(color, mode as Int,
+                        if (settings.enabled) settings.backgroundOpacity else 100)
+                    else softGlassColorAlpha(color, opacity(view, settings))
                     Prepared(arrayOf(color, mode), arrayOf(tuned, mode), ticket, scene, parent,
                         if (isBackdrop(view)) ShadeScope.generation else null)
                 } ?: return@hook if (skipBackdropReplay(view)) null else chain.proceed()
@@ -384,6 +388,10 @@ internal class ViewMaterialEngine(
             else -> it
         }
     }.toTypedArray()
+
+    private fun shadePoints(input: Any?, percent: Int): ArrayList<Point> = ArrayList(
+        (input as? List<*>)?.filterIsInstance<Point>()?.map { Point(shadeBlendColor(it.x, it.y, percent), it.y) } ?: emptyList()
+    )
 
     private fun points(input: Any?, percent: Int): ArrayList<Point> = ArrayList(
         (input as? List<*>)?.filterIsInstance<Point>()?.map { Point(softGlassColorAlpha(it.x, percent), it.y) } ?: emptyList()

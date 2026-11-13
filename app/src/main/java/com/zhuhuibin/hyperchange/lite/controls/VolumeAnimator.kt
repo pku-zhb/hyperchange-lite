@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import com.zhuhuibin.hyperchange.lite.readField
 import java.lang.ref.WeakReference
 
@@ -68,6 +69,12 @@ internal class VolumeAnimator(
     private var returnAt = 0L
     private var scheduled = false
     private var owns = false
+    private var dismissalObserver: ViewTreeObserver? = null
+    private val dismissalFrame = ViewTreeObserver.OnPreDrawListener {
+        val view = column.get()
+        if (session.dismissing && (view == null || !view.isAttachedToWindow || !view.isShown)) restore()
+        true
+    }
     private val touching get() = interaction.touching
     val narrow: Boolean get() = owns && interaction.visible && interaction.narrow && column.get()?.isShown == true
     private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -146,6 +153,7 @@ internal class VolumeAnimator(
 
     fun refresh() {
         if (!enabled()) { restore(); return }
+        if (session.dismissing) return
         readPlacement()
         if (!interaction.visible) return
         if (!acquire()) return
@@ -155,12 +163,25 @@ internal class VolumeAnimator(
 
     fun show() {
         if (!enabled()) return
+        if (session.dismissing) restore()
         val firstShow = !interaction.visible
         session.show(nativeLevel())
         if (firstShow) { pendingPop = true; onPhaseChanged() }
         // Remember show even if native attachment or measured dimensions are not
         // ready; the attach/layout observer retries without losing the session.
         refresh()
+    }
+
+    fun dismiss() {
+        session.dismiss()
+        if (!session.dismissing) return
+        column.get()?.removeCallbacks(this)
+        scheduled = false
+        returnAt = 0L
+        val view = column.get()
+        if (view == null || !view.isAttachedToWindow || !view.isShown) { restore(); return }
+        if (dismissalObserver?.isAlive == true) return
+        dismissalObserver = view.viewTreeObserver.also { it.addOnPreDrawListener(dismissalFrame) }
     }
 
     private fun nativeLevel(): Int? {
@@ -180,7 +201,7 @@ internal class VolumeAnimator(
     }
 
     fun nativeSizeUpdated(index: Int) {
-        if (!owns) return
+        if (!owns || session.dismissing) return
         widthBaseline.updateNative(index, parts.getOrNull(index)?.get()?.layoutParams?.width ?: 0)
         placementDirty = true
         refresh()
@@ -195,6 +216,7 @@ internal class VolumeAnimator(
     }
 
     fun touch(event: MotionEvent) {
+        if (session.dismissing) return
         if (!acquire()) return
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -233,7 +255,7 @@ internal class VolumeAnimator(
     fun nudge() {
         // The key that opens the native panel can arrive before its show callback.
         // Its show starts wide; subsequent key animations narrow that live session.
-        if (!interaction.visible) return
+        if (!interaction.visible || session.dismissing) return
         if (!acquire()) return
         transition(VolumeInteractionEvent.HARDWARE_KEY)
         targetWidth(if (interaction.narrow) thin() else normalWidths[0].toFloat())
@@ -323,6 +345,7 @@ internal class VolumeAnimator(
     }
 
     override fun run() {
+        if (session.dismissing) { scheduled = false; return }
         val view = column.get()
         if (view == null || !view.isAttachedToWindow || !enabled()) { restore(); return }
         val now = System.nanoTime()
@@ -348,6 +371,8 @@ internal class VolumeAnimator(
     }
 
     fun restore() {
+        dismissalObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(dismissalFrame)
+        dismissalObserver = null
         column.get()?.removeCallbacks(this)
         scheduled = false; returnAt = 0L
         pendingPop = false
