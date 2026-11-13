@@ -2,14 +2,83 @@
 package com.zhuhuibin.hyperchange.lite.preview
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.view.View
-import com.zhuhuibin.hyperchange.lite.glass.readSoftGlassSettings
+import com.zhuhuibin.hyperchange.lite.SettingsMigration
+import com.zhuhuibin.hyperchange.lite.glass.SoftGlassSettings
 import com.zhuhuibin.hyperchange.lite.glass.softGlassBlur
 import com.zhuhuibin.hyperchange.lite.glass.softGlassScale
 import com.zhuhuibin.hyperchange.lite.glass.tuneSoftGlass
 import java.lang.reflect.Method
+
+internal data class PreviewMaterialState(
+    val settings: SoftGlassSettings,
+    val scopeStatus: String,
+    val scopeNote: String,
+)
+
+/** The preview is an unlocked local sample, never a simulated SystemUI scope. */
+internal fun previewMaterialState(
+    scene: String,
+    values: Map<String, *>,
+    saved: SoftGlassSettings,
+    respectScopes: Boolean,
+): PreviewMaterialState {
+    fun enabled(key: String, fallback: Boolean = false) = values[key] as? Boolean ?: fallback
+    val range = when (scene) {
+        "NOTIFICATION", "HEADS_UP" -> enabled("glass_notifications", true)
+        "MEDIA" -> SettingsMigration.resolve(values)[SettingsMigration.MEDIA_KEY] == true
+        "CONTROL" -> enabled("glass_control_center", true)
+        "VOLUME" -> enabled("glass_volume", true)
+        "SHADE" -> enabled("glass_shade", true)
+        else -> true
+    }
+    val independent = scene == "WIDGET" || scene == "SIDEBAR"
+    val active = !respectScopes || when (scene) {
+        "WIDGET" -> enabled("glass_assistant")
+        "SIDEBAR" -> enabled("glass_sidebar")
+        else -> saved.enabled && range
+    }
+    val settings = saved.copy(
+        enabled = active,
+        backgroundBlur = if (independent) 100 else saved.backgroundBlur,
+        backgroundScale = if (independent) 100 else saved.backgroundScale,
+        backgroundOpacity = if (independent) 100 else saved.backgroundOpacity,
+    )
+    val status = when {
+        !respectScopes -> "本地调参"
+        active -> "当前范围调参已开启"
+        !range -> "当前范围已关闭，调参暂停"
+        independent -> "当前独立开关已关闭，调参暂停"
+        else -> "柔光调节已关闭，参数保留"
+    }
+    val note = when (scene) {
+        "NOTIFICATION", "MEDIA" -> "统一材质${if (enabled("glass_unify_notifications")) "开" else "关"}；锁屏范围${if (SettingsMigration.resolve(values)[SettingsMigration.LOCKSCREEN_KEY] == true) "开" else "关"}（系统切换未模拟）"
+        "HEADS_UP" -> "悬浮不参与统一材质；锁屏状态未模拟"
+        "SIDEBAR" -> "统一侧栏${if (enabled("glass_sidebar_unify")) "开" else "关"}；系统侧栏配方未还原"
+        "WIDGET" -> "独立于系统柔光开关；系统组件配方未还原"
+        else -> "正常通知配方样例；未还原系统场景配方"
+    }
+    return PreviewMaterialState(settings, status, note)
+}
+
+/** Disabled geometry controls retain a stable local baseline instead of leaking saved overrides. */
+internal fun previewRadius(
+    key: String,
+    saved: Float,
+    baseline: Float,
+    values: Map<String, *>,
+    respectEnabled: Boolean,
+): Float {
+    val switch = when {
+        key == "notification_radius" -> "notification_radius_enabled"
+        key.startsWith("cc_") -> "cc_radius_enabled"
+        key == "volume_corner" -> "volume_corner_enabled"
+        key == "volume_timer_corner" -> "volume_timer_corner_enabled"
+        else -> null
+    }
+    return (if (!respectEnabled || switch == null || values[switch] == true) saved else baseline).coerceAtLeast(0f)
+}
 
 /** Uses the installed OEM recipe; no copied HyperLight material or native binary. */
 internal class NativePreviewMaterial(private val context: Context) {
@@ -22,13 +91,11 @@ internal class NativePreviewMaterial(private val context: Context) {
         if (night != value) { night = value; resolved = false; recipe = null }
     }
 
-    fun apply(view: View, preferences: SharedPreferences, respectEnabled: Boolean = false): Boolean {
+    fun apply(view: View, glass: SoftGlassSettings): Boolean {
         if (!resolved) resolveRecipe()
         val original = recipe ?: return false
         if (view.width <= 0 || view.height <= 0 || !view.isHardwareAccelerated) return false
         return runCatching {
-            val saved = readSoftGlassSettings(preferences)
-            val glass = if (respectEnabled) saved else saved.copy(enabled = true)
             // The test chart is inside this Activity. Use the OEM local-content
             // path, as HyperChanger's applyLocalBlur does, rather than sampling
             // the separate window behind this App. A missing setup API must not
@@ -39,7 +106,7 @@ internal class NativePreviewMaterial(private val context: Context) {
             invoke(view, "setPassWindowBlurEnabled", false)
             invoke(view, "setMiViewBlurMode", 1)
             invoke(view, "setMiViewMaterialType", 1)
-            optional(view, "setMiBackgroundBlurScaleRatio", softGlassScale(.075f, if (glass.enabled) glass.backgroundScale else 100))
+            invoke(view, "setMiBackgroundBlurScaleRatio", softGlassScale(.075f, if (glass.enabled) glass.backgroundScale else 100))
             optional(view, "setMiGlassSdfMaxSize", view.width.toFloat(), view.height.toFloat())
             val refraction = if (glass.enabled) glass.refractionBlur else 100
             invoke(view, "setMiGlassBlurRadius", softGlassBlur(36, refraction), softGlassBlur(72, refraction))

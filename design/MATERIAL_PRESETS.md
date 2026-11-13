@@ -19,7 +19,7 @@ whose blur and material inputs differ substantially.
 
 ## Application and restoration
 
-Open **柔光玻璃 → 材质预设**. Applying a recipe commits the complete material
+Open **材质编辑 → 预设**. Applying a recipe commits the complete material
 parameter set and `glass_enabled=true` in one local edit, then publishes through
 the existing module connection. It preserves music takeover, ordinary and
 lockscreen ranges, the unified recipe, Assistant/sidebar and all other features.
@@ -41,8 +41,10 @@ format is required; current material numbers remain included in normal exports.
 
 ## Preview honesty
 
-The preset page respects the saved material master toggle for a parameter-on/off
-comparison. Other preview pages retain their existing independent sample mode.
+The material editor respects the saved material master toggle and the selected
+scene's material range for a parameter-on/off comparison. Its preview remains
+pinned at the top while categories, presets and parameters scroll below it.
+Behavior preview pages retain their existing independent sample mode.
 Turning tuning off preserves any separately selected unified recipe, so this
 comparison is the current material before relative tuning, not an unconditional
 return to every OEM default.

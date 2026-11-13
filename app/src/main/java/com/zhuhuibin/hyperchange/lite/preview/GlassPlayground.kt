@@ -25,6 +25,7 @@ import android.widget.Toast
 import com.zhuhuibin.hyperchange.lite.notifications.NotificationMotion
 import com.zhuhuibin.hyperchange.lite.controls.VolumeMotionModel
 import com.zhuhuibin.hyperchange.lite.controls.VolumeSpring
+import com.zhuhuibin.hyperchange.lite.glass.readSoftGlassSettings
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -32,7 +33,7 @@ import kotlin.math.roundToInt
 /** All preview gestures and animations remain within this Activity. */
 class GlassPlayground(context: Context, private val preferences: SharedPreferences) : FrameLayout(context) {
     enum class Scene(val title: String) {
-        NOTIFICATION("通知"), HEADS_UP("悬浮"), MEDIA("媒体"), CONTROL("控制中心"), VOLUME("音量"), WIDGET("负一屏"), SIDEBAR("侧栏")
+        NOTIFICATION("通知"), HEADS_UP("悬浮"), MEDIA("媒体"), CONTROL("控制中心"), VOLUME("音量"), WIDGET("负一屏"), SIDEBAR("侧栏"), SHADE("下拉背景")
     }
     var scene: Scene = Scene.NOTIFICATION
         private set
@@ -121,7 +122,6 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             setPadding(dp(8), dp(3), dp(8), dp(3))
             setTextColor(Color.WHITE)
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.TRANSPARENT, 0x65000000))
-            contentDescription = "预览状态"
         }
         addView(caption, LayoutParams(-1, dp(35), Gravity.BOTTOM))
         setOnClickListener { if (removed) replay() }
@@ -181,6 +181,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     fun setFocusGroup(group: String) {
         focusGroup = group
         when {
+            group.contains("下拉") -> setScene(Scene.SHADE)
             group.contains("悬浮") -> setScene(Scene.HEADS_UP)
             group.contains("通知") -> setScene(Scene.NOTIFICATION)
             group.contains("音量") -> setScene(Scene.VOLUME)
@@ -198,10 +199,15 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         if (surfaces.isNotEmpty()) buildScene()
     }
 
-    /** Preset A/B respects the saved master switch; other previews show the parameters. */
+    /** The material editor respects runtime scope and geometry switches. */
     fun setMaterialComparison(value: Boolean) {
         if (materialComparison == value) return
         materialComparison = value
+        val captionLines = if (value) 3 else 2
+        val captionHeight = max(dp(if (value) 44 else 35),
+            kotlin.math.ceil(caption.paint.fontSpacing * captionLines).toInt() + caption.paddingTop + caption.paddingBottom)
+        caption.layoutParams = LayoutParams(-1, captionHeight, Gravity.BOTTOM)
+        content.layoutParams = LayoutParams(-1, -1).apply { bottomMargin = captionHeight }
         refresh()
     }
 
@@ -291,9 +297,11 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             }
             Scene.CONTROL -> {
                 addCard("无线网络", "已连接", "⌁", false).radiusKey = "cc_card_radius"
-                addCard("蓝牙", "已开启", "ᛒ", false).radiusKey = "cc_card_radius"
+                addCard("小磁贴", "蓝牙已开启", "ᛒ", false).radiusKey = "cc_tile_radius"
                 addCard("屏幕亮度", "━━━━━━━ ──", "☀", false).radiusKey = "cc_slider_radius"
                 addCard("正在播放", "沿岸漫步   Ⅱ", "♫", false).radiusKey = "cc_media_radius"
+                addCard("设备中心", "附近的设备", "▣", false).radiusKey = "cc_device_radius"
+                addCard("二级面板", "更多控制选项", "⋮", false).radiusKey = "cc_secondary_radius"
             }
             Scene.VOLUME -> {
                 addCard("", "", "♪", false).radiusKey = "volume_corner"
@@ -305,6 +313,9 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             }
             Scene.SIDEBAR -> {
                 addCard("侧边工具箱", "截图    录屏    小窗\n\n        ▣        ◉        ▤", "⋮", false)
+            }
+            Scene.SHADE -> {
+                addCard("下拉背景", "观察背景细线、色块与混色\n\n背景采样与材质都仅在此处预览", "☷", false).radiusKey = ""
             }
         }
         post { layoutScene(); refresh() }
@@ -328,10 +339,14 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         row.addView(badge, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(12) })
         val words = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         words.addView(TextView(context).apply { text = title; textSize = 13f; setTextColor(foreground); setTypeface(typeface, Typeface.BOLD); maxLines = 1 })
-        words.addView(TextView(context).apply {
+        val detailText = TextView(context).apply {
             text = detail; textSize = 11f; setTextColor(foreground); alpha = .75f
             setPadding(0, dp(5), 0, 0); maxLines = 5
-        })
+        }
+        words.addView(detailText)
+        card.detailText = detailText
+        card.badgeView = badge
+        card.labelRow = row
         row.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
         if (scene == Scene.VOLUME && title.isEmpty()) {
             card.addView(object : View(context) {
@@ -363,6 +378,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             card.layoutParams = LayoutParams(width.coerceAtLeast(1), height.coerceAtLeast(1)).apply { leftMargin = x; topMargin = y }
             card.pivotX = width * .5f
             card.pivotY = height * .5f
+            card.setCompact(height < dp(58), height < dp(38))
             if (animated) {
                 val oldX = card.scaleX; val oldY = card.scaleY
                 val travel = previousTop - y
@@ -376,40 +392,57 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             } else if (pressAnimator?.isRunning != true) { card.scaleX = scale; card.scaleY = scale; card.translationY = 0f }
             card.updateMaterial()
         }
-        val margin = dp(22)
-        val width = (w - margin * 2).coerceAtLeast(dp(160))
+        val margin = dp(if (h < dp(150)) 10 else 22).coerceAtMost(w / 8)
+        val inset = dp(if (h < dp(150)) 6 else 12).coerceAtMost(h / 8)
+        val availableHeight = (h - inset * 2).coerceAtLeast(1)
+        val width = (w - margin * 2).coerceAtLeast(1)
         when (scene) {
             Scene.NOTIFICATION -> {
-                val cardHeight = if (expanded) ((h - dp(34)) / 3).coerceAtLeast(dp(47)) else dp(82)
-                val top = ((h - if (expanded) cardHeight * 3 + dp(12) else cardHeight) / 2).coerceAtLeast(dp(12))
+                val gap = dp(6).coerceAtMost(availableHeight / 8)
+                val cardHeight = if (expanded) ((availableHeight - gap * 2) / 3).coerceAtLeast(1)
+                    else dp(82).coerceAtMost((availableHeight - dp(12)).coerceAtLeast(1))
+                val top = ((h - if (expanded) cardHeight * 3 + gap * 2 else cardHeight) / 2).coerceAtLeast(inset)
                 surfaces.forEachIndexed { i, card ->
                     val depth = 2 - i
                     val frame = NotificationMotion.group(depth, number("notification_group_stack_spacing", 6f), number("notification_group_stack_scale", .95f))
-                    val y = if (expanded) top + depth * (cardHeight + dp(6)) else top + dp(frame.offsetDp).roundToInt()
+                    val y = if (expanded) top + depth * (cardHeight + gap) else top + dp(frame.offsetDp).roundToInt().coerceAtMost((h - top - cardHeight).coerceAtLeast(0))
                     place(card, margin, y, width, cardHeight, if (expanded) 1f else frame.scale)
                     card.alpha = if (expanded || depth == 0) 1f else .92f
                 }
             }
-            Scene.HEADS_UP -> surfaces.firstOrNull()?.let { place(it, margin, dp(24), width, dp(82)) }
-            Scene.MEDIA -> surfaces.firstOrNull()?.let { place(it, margin, ((h - dp(128)) / 2).coerceAtLeast(dp(8)), width, dp(128)) }
+            Scene.HEADS_UP -> surfaces.firstOrNull()?.let { place(it, margin, inset, width, dp(82).coerceAtMost(availableHeight)) }
+            Scene.MEDIA -> surfaces.firstOrNull()?.let {
+                val height = dp(128).coerceAtMost(availableHeight)
+                place(it, margin, (h - height) / 2, width, height)
+            }
             Scene.CONTROL -> {
-                val gap = dp(10)
-                val half = (width - gap) / 2
-                val height = ((h - dp(34) - gap) / 2).coerceAtLeast(dp(65))
-                surfaces.forEachIndexed { i, card -> place(card, margin + (i % 2) * (half + gap), dp(17) + (i / 2) * (height + gap), half, height) }
+                val columns = if (width >= dp(420) || h < dp(110)) 3 else 2
+                val rows = (surfaces.size + columns - 1) / columns
+                val gap = dp(if (h < dp(150)) 5 else 10).coerceAtMost(availableHeight / 12)
+                val cellWidth = ((width - gap * (columns - 1)) / columns).coerceAtLeast(1)
+                val cellHeight = ((availableHeight - gap * (rows - 1)) / rows).coerceAtLeast(1)
+                surfaces.forEachIndexed { i, card ->
+                    place(card, margin + (i % columns) * (cellWidth + gap), inset + (i / columns) * (cellHeight + gap), cellWidth, cellHeight)
+                }
             }
             Scene.VOLUME -> {
                 val x = w / 2 - dp(38)
                 val barWidth = dp(if (volumeScheduled) volumeWidth.value else number("volume_thin_width", 9f)).roundToInt().coerceIn(dp(4), dp(84))
-                val barHeight = dp(number("volume_height", 150f)).roundToInt().coerceIn(dp(80), (h - dp(24)).coerceAtLeast(dp(80)))
+                val barHeight = dp(number("volume_height", 150f)).roundToInt().coerceAtLeast(dp(24)).coerceAtMost(availableHeight)
                 surfaces.getOrNull(0)?.let { place(it, x, (h - barHeight) / 2, barWidth, barHeight) }
-                surfaces.getOrNull(1)?.let { place(it, x + dp(64), h / 2 - dp(34), (w - x - dp(84)).coerceAtLeast(dp(90)), dp(68)) }
+                val timerHeight = dp(68).coerceAtMost(availableHeight)
+                surfaces.getOrNull(1)?.let { place(it, x + dp(64), (h - timerHeight) / 2, (w - x - dp(84)).coerceAtLeast(dp(50)), timerHeight) }
             }
             Scene.WIDGET -> {
                 val half = (width - dp(10)) / 2
-                surfaces.forEachIndexed { i, card -> place(card, margin + i * (half + dp(10)), ((h - dp(126)) / 2).coerceAtLeast(dp(10)), half, dp(126)) }
+                val height = dp(126).coerceAtMost(availableHeight)
+                surfaces.forEachIndexed { i, card -> place(card, margin + i * (half + dp(10)), (h - height) / 2, half, height) }
             }
-            Scene.SIDEBAR -> surfaces.firstOrNull()?.let { place(it, margin, ((h - dp(132)) / 2).coerceAtLeast(dp(10)), width, dp(132)) }
+            Scene.SIDEBAR -> surfaces.firstOrNull()?.let {
+                val height = dp(132).coerceAtMost(availableHeight)
+                place(it, margin, (h - height) / 2, width, height)
+            }
+            Scene.SHADE -> surfaces.firstOrNull()?.let { place(it, margin, inset, width, availableHeight) }
         }
         updateCaption()
     }
@@ -640,8 +673,22 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             Scene.VOLUME -> "按住拖动 · 松开回弹"
             else -> "实时调参"
         }
-        val label = "$materialLabel · 本地交互示意\n$action，不启用系统功能"
+        val state = currentMaterialState()
+        val shortMaterialLabel = when {
+            !ready -> "准备中"
+            native -> "原生接口已调用"
+            else -> "示意预览"
+        }
+        val label = if (materialComparison)
+            "${scene.title} · $shortMaterialLabel · 通知配方样例\n${state.scopeStatus}\n${state.scopeNote}"
+        else "$materialLabel · 本地交互示意\n$action，不启用系统功能"
         if (caption.text.toString() != label) caption.text = label
+        // Only the shade fallback approximates background sampling. Never label
+        // this RenderEffect as the unavailable OEM glass/refraction renderer.
+        val fallbackBackground = scene == Scene.SHADE && ready && !native
+        val blur = if (state.settings.enabled) state.settings.backgroundBlur else 100
+        val scale = if (state.settings.enabled) state.settings.backgroundScale else 100
+        wallpaper.setSamplingFallback(fallbackBackground, blur, scale)
     }
 
     override fun onDetachedFromWindow() { cancelAnimations(); super.onDetachedFromWindow() }
@@ -653,10 +700,16 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
     private fun number(key: String, default: Float) = (preferences.all[key] as? Number)?.toFloat() ?: default
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
     private fun dp(value: Float) = value * resources.displayMetrics.density
+    private fun currentMaterialState() = previewMaterialState(
+        scene.name, preferences.all, readSoftGlassSettings(preferences), materialComparison,
+    )
 
     private inner class SampleSurface(context: Context) : FrameLayout(context) {
         var nativeApplied = false
-        var radiusKey = "notification_radius"
+        var radiusKey = if (scene == Scene.NOTIFICATION || scene == Scene.HEADS_UP || scene == Scene.MEDIA) "notification_radius" else ""
+        var detailText: TextView? = null
+        var badgeView: TextView? = null
+        var labelRow: LinearLayout? = null
         private var radius = dp(24).toFloat()
         init {
             clipToOutline = true
@@ -665,16 +718,37 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             }
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMaterial() }
         }
+        fun setCompact(compact: Boolean, tiny: Boolean) {
+            detailText?.visibility = if (compact) View.GONE else View.VISIBLE
+            val badgeSize = dp(if (tiny) 20 else if (compact) 26 else 34)
+            badgeView?.apply {
+                visibility = if (tiny) View.GONE else View.VISIBLE
+                textSize = if (tiny) 15f else if (compact) 18f else 22f
+                val params = layoutParams as LinearLayout.LayoutParams
+                if (params.width != badgeSize) {
+                    params.width = badgeSize; params.height = badgeSize
+                    params.rightMargin = dp(if (compact) 7 else 12)
+                    layoutParams = params
+                }
+            }
+            labelRow?.setPadding(dp(if (compact) 8 else 12), dp(if (tiny) 2 else 6), dp(if (compact) 8 else 12), dp(if (tiny) 2 else 6))
+        }
         fun updateMaterial() {
-            radius = dp(number(radiusKey, if (scene == Scene.VOLUME) 40f else 26f)).coerceAtLeast(0f)
+            val baseline = when (radiusKey) {
+                "cc_card_radius", "cc_slider_radius", "volume_corner", "volume_timer_corner" -> 40f
+                "cc_tile_radius" -> 24f
+                else -> 26f
+            }
+            radius = dp(previewRadius(radiusKey, number(radiusKey, baseline), baseline, preferences.all, materialComparison))
             invalidateOutline()
-            nativeApplied = material.apply(this, preferences, respectEnabled = materialComparison)
-            val opacity = if (materialComparison && !preferences.getBoolean("glass_enabled", false)) 1f
-                else number("glass_background_opacity", 100f) / 100f
+            val state = currentMaterialState()
+            nativeApplied = material.apply(this, state.settings)
+            val opacity = if (state.settings.enabled) state.settings.backgroundOpacity / 100f else 1f
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
                 if (night) Color.argb(((if (nativeApplied) 20 else 166) * opacity).roundToInt().coerceIn(0, 240), 26, 37, 51)
                 else Color.argb(((if (nativeApplied) 22 else 185) * opacity).roundToInt().coerceIn(0, 240), 255, 255, 255),
-                if (night) 0x442b3547 else 0x66ffffff,
+                if (night) Color.argb((68 * opacity).roundToInt().coerceIn(0, 240), 43, 53, 71)
+                else Color.argb((102 * opacity).roundToInt().coerceIn(0, 240), 255, 255, 255),
             )).apply { cornerRadius = radius; setStroke(dp(1), if (night) 0x28ffffff else 0x80ffffff.toInt()) }
             // Layout can finish after the Compose update that requested the sample.
             // Publish the actual configured result rather than leaving its label stale.
@@ -688,8 +762,23 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
         private var image: Bitmap? = null
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private val matrix = Matrix()
+        private var fallbackSampling = false
+        private var fallbackBlur = 100
+        private var fallbackScale = 100
+        fun setSamplingFallback(enabled: Boolean, blur: Int, scale: Int) {
+            if (fallbackSampling == enabled && fallbackBlur == blur && fallbackScale == scale) return
+            fallbackSampling = enabled; fallbackBlur = blur; fallbackScale = scale
+            val radius = if (enabled) 20f * blur / 100f * resources.displayMetrics.density else 0f
+            setRenderEffect(if (radius > .1f) RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP) else null)
+            invalidate()
+        }
         fun setImage(value: Bitmap?) { image = value; invalidate() }
         override fun onDraw(canvas: Canvas) {
+            val save = canvas.save()
+            if (fallbackSampling) {
+                val zoom = 2f - fallbackScale.coerceIn(0, 200) / 200f
+                canvas.scale(zoom, zoom, width * .5f, height * .5f)
+            }
             val bitmap = image
             if (bitmap != null && !bitmap.isRecycled) {
                 val scale = max(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
@@ -718,6 +807,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
                 canvas.drawPath(path, paint)
             }
             if (night) { paint.shader = null; paint.color = 0x55091020; canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint) }
+            canvas.restoreToCount(save)
         }
 
         private fun drawContrastChart(canvas: Canvas) {

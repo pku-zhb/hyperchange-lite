@@ -1,5 +1,28 @@
 # Host validation
 
+## Unified material editor source branch
+
+- `LITE_DEV_CACHE=/Volumes/Harbor/DevCache/hyperchange-lite-material-editor
+  ./tools/build.sh :app:testDebugUnitTest :app:compileDebugKotlin` passed.
+  All 80 tests in 15 suites passed, with zero failures, errors or skips. New
+  checks cover unique material ownership, behavior separation, scene ranges,
+  independent Assistant/sidebar switches and enabled geometry overrides.
+- Build, project cache, Kotlin state and temporary output were isolated from the
+  main checkout. No delivery APK was assembled, versioned or archived. The
+  existing Preview 4 package version remains unchanged for this source branch.
+- Source review confirms one material destination, one preview outside the
+  scrolling settings list at every width, integrated preset/undo controls, and
+  direct access to all controls in the selected material category. Existing
+  validation, migration, reset and import/export consumers are unchanged.
+- Preview coverage includes six Control Center corner samples and a new shade
+  scene. Native setup still uses the installed normal-notification recipe; its
+  caption distinguishes this sample from actual OEM scene recipes and SystemUI
+  scope activation. Fallback approximates shade blur/scale and background mix;
+  it cannot reproduce all glass/refraction/light parameters.
+- No phone installation, GUI operation, screenshots, settings changes or scope
+  reload were performed. Narrow-screen and landscape inner-display appearance,
+  scroll pinning and native A/E material comparison remain visual acceptance.
+
 ## 0.1.0-preview4 material presets
 
 - All 73 JVM tests passed: the previous 64, five built-in recipe/backup checks and

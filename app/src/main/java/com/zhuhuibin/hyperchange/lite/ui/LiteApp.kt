@@ -56,7 +56,8 @@ fun LiteApp(
     var page by rememberSaveable { mutableStateOf("home") }
     var previewReturn by rememberSaveable { mutableStateOf("home") }
     var presetsReturn by rememberSaveable { mutableStateOf("home") }
-    var glassPresetsReturn by rememberSaveable { mutableStateOf("GLASS") }
+    var materialScene by rememberSaveable { mutableIntStateOf(GlassPlayground.Scene.CONTROL.ordinal) }
+    var materialCategoryName by rememberSaveable { mutableStateOf(MaterialCategory.PRESETS.name) }
     var sceneIndex by rememberSaveable { mutableIntStateOf(0) }
     var focusGroup by rememberSaveable { mutableStateOf("") }
     var night by rememberSaveable { mutableStateOf(false) }
@@ -67,28 +68,32 @@ fun LiteApp(
     val feature = Feature.entries.firstOrNull { it.name == page }
     val values = remember(revision) { repository.preferences.all }
     val connection = when { repository.syncFailed -> 2; repository.connected -> 1; else -> 0 }
-    val navigateBack = { page = when (page) { "preview" -> previewReturn; "presets" -> presetsReturn; "glass-presets" -> glassPresetsReturn; else -> "home" } }
-    val openPresets = { presetsReturn = page; page = "presets" }
-    val openGlassPresets = {
-        glassPresetsReturn = page
-        focusGroup = "柔光玻璃"
-        sceneIndex = GlassPlayground.Scene.CONTROL.ordinal
-        page = "glass-presets"
+    LaunchedEffect(page) {
+        // Older saved navigation state can outlive an App upgrade. Map those
+        // destinations into the editor without changing any stored setting.
+        when (page) {
+            "GLASS", "glass-presets" -> {
+                materialCategoryName = if (page == "glass-presets") MaterialCategory.PRESETS.name else MaterialCategory.SURFACE.name
+                page = Feature.MATERIAL.name
+            }
+            "CONTROL" -> { materialCategoryName = MaterialCategory.CONTROL.name; materialScene = GlassPlayground.Scene.CONTROL.ordinal; page = Feature.MATERIAL.name }
+            "ASSISTANT" -> { materialCategoryName = MaterialCategory.ASSISTANT.name; materialScene = GlassPlayground.Scene.WIDGET.ordinal; page = Feature.MATERIAL.name }
+        }
     }
+    val navigateBack = { page = when (page) { "preview" -> previewReturn; "presets" -> presetsReturn; else -> "home" } }
+    val openPresets = { presetsReturn = page; page = "presets" }
     BackHandler(page != "home" && editKey == null && !resetDialog && !backgroundDialog) { navigateBack() }
 
     fun selectFeature(target: Feature) {
         page = target.name
         focusGroup = when (target) {
             Feature.VOLUME -> "音量交互"
-            Feature.CONTROL -> "控制中心"
-            Feature.ASSISTANT -> "负一屏组件"
+            Feature.MATERIAL -> "材质"
             else -> "通知"
         }
         sceneIndex = when (target) {
-            Feature.CONTROL -> GlassPlayground.Scene.CONTROL.ordinal
+            Feature.MATERIAL -> GlassPlayground.Scene.CONTROL.ordinal
             Feature.VOLUME -> GlassPlayground.Scene.VOLUME.ordinal
-            Feature.ASSISTANT -> GlassPlayground.Scene.WIDGET.ordinal
             else -> GlassPlayground.Scene.NOTIFICATION.ordinal
         }
     }
@@ -98,7 +103,6 @@ fun LiteApp(
                 SmallTopAppBar(
                     title = feature?.title ?: when (page) {
                         "presets" -> "配置管理"
-                        "glass-presets" -> "材质预设"
                         "preview" -> "场景预览"
                         else -> "HyperChange Lite"
                     },
@@ -122,18 +126,34 @@ fun LiteApp(
                 val previewContent: @Composable () -> Unit = {
                     PreviewPanel(repository, revision, sceneIndex, { sceneIndex = it }, focusGroup,
                         night, { night = !night }, replay, { replay++ }, wallpaperUri, wallpaperStyle,
-                        { backgroundDialog = true }, if (wide || page == "preview" || page == "glass-presets") 300 else 230,
-                        materialComparison = page == "glass-presets")
+                        { backgroundDialog = true }, if (wide || page == "preview") 300 else 230)
                 }
                 when {
-                    page == "home" -> Home(connection, wide, ::selectFeature, {
-                        previewReturn = "home"; page = "preview"
-                    }, openPresets)
+                    page == "home" -> Home(connection, wide, ::selectFeature, openPresets)
                     page == "presets" -> Presets(onExport, onImport, { resetDialog = true })
-                    page == "glass-presets" -> GlassPresetsPage(values, connection,
-                        repository.hasGlassPresetUndo, onApplyGlassPreset, onRestoreGlassPreset,
-                        { enabled -> onWrite(com.zhuhuibin.hyperchange.lite.LiteCatalog.entries.first { it.key == "glass_enabled" }, enabled) },
-                        { selectFeature(Feature.GLASS) }, previewContent)
+                    feature == Feature.MATERIAL -> pageStates.SaveableStateProvider(Feature.MATERIAL.name) {
+                        val category = MaterialCategory.entries.firstOrNull { it.name == materialCategoryName }
+                            ?: MaterialCategory.PRESETS
+                        MaterialEditorPage(
+                            category, { selected ->
+                                materialCategoryName = selected.name
+                                materialSceneForCategory(selected)?.let { materialScene = it.ordinal }
+                            }, materialScene, { materialScene = it }, values, connection,
+                            repository.hasGlassPresetUndo, onApplyGlassPreset, onRestoreGlassPreset,
+                            { spec, value ->
+                                materialSceneForSetting(spec)?.let { materialScene = it.ordinal }
+                                onWrite(spec, value)
+                            }, { spec ->
+                                materialSceneForSetting(spec)?.let { materialScene = it.ordinal }
+                                editKey = spec.key
+                            },
+                            preview = { height ->
+                                PreviewPanel(repository, revision, materialScene, { materialScene = it }, "材质",
+                                    night, { night = !night }, replay, { replay++ }, wallpaperUri, wallpaperStyle,
+                                    { backgroundDialog = true }, height, materialComparison = true, compact = true)
+                            },
+                        )
+                    }
                     page == "preview" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                         previewContent()
                         Hint("预览只在 App 内运行。系统效果仍由对应功能开关控制。")
@@ -147,7 +167,7 @@ fun LiteApp(
                                         previewContent()
                                         TextButton(text = "展开预览页", onClick = { previewReturn = page; page = "preview" }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                                     }
-                                }, onGlassPresets = openGlassPresets,
+                                },
                             ) { group ->
                                 focusGroup = group
                                 sceneIndex = sceneForGroup(group).ordinal
@@ -184,7 +204,7 @@ fun LiteApp(
 }
 
 @Composable
-private fun Home(connection: Int, wide: Boolean, onFeature: (Feature) -> Unit, onPreview: () -> Unit, onPresets: () -> Unit) {
+private fun Home(connection: Int, wide: Boolean, onFeature: (Feature) -> Unit, onPresets: () -> Unit) {
     val destinations: @Composable () -> Unit = {
         SmallTitle("功能")
         Card(Modifier.fillMaxWidth()) {
@@ -205,9 +225,8 @@ private fun Home(connection: Int, wide: Boolean, onFeature: (Feature) -> Unit, o
         }
     }
     val utilities: @Composable () -> Unit = {
-        SmallTitle("预览与配置")
+        SmallTitle("配置")
         Card(Modifier.fillMaxWidth()) {
-            ArrowPreference("场景预览", summary = "通知、媒体、音量与系统面板", onClick = onPreview)
             ArrowPreference("配置管理", summary = "导入、导出与恢复默认", onClick = onPresets)
         }
         Hint("按功能逐项开启。已有参数会保留，不需要重新设置。")
@@ -224,18 +243,16 @@ private fun Home(connection: Int, wide: Boolean, onFeature: (Feature) -> Unit, o
 private fun FeatureSettings(
     feature: Feature, values: Map<String, *>, onWrite: (LiteSetting, Any) -> Unit,
     onEdit: (LiteSetting) -> Unit, modifier: Modifier,
-    preview: (@Composable () -> Unit)?, onGlassPresets: () -> Unit, onFocus: (String) -> Unit,
+    preview: (@Composable () -> Unit)?, onFocus: (String) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var previewOpen by rememberSaveable { mutableStateOf(false) }
     val sections = feature.settings.filter { query.isBlank() || it.title.contains(query.trim(), true) || it.group.contains(query.trim(), true) || it.summary.contains(query.trim(), true) }.groupBy { it.group }
     LazyColumn(modifier, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (feature == Feature.GLASS) item("material-presets") {
-            Card(Modifier.fillMaxWidth()) {
-                ArrowPreference("材质预设", summary = "HyperChanger 原版六套，一键切换与还原", onClick = onGlassPresets)
-            }
-        }
         item("search") { TextField(value = query, onValueChange = { query = it }, label = "搜索${feature.title}设置", singleLine = true, modifier = Modifier.fillMaxWidth()) }
+        if (feature == Feature.NOTIFICATIONS) item("notification-scope") {
+            Hint("锁屏通知效果由“材质编辑”中的“作用范围”统一控制。")
+        }
         if (preview != null) item("preview") {
             Card(Modifier.fillMaxWidth()) { ArrowPreference(if (previewOpen) "收起预览" else "查看对应预览", summary = if (previewOpen) null else "调参时可随时展开", onClick = { previewOpen = !previewOpen }) }
             if (previewOpen) Box(Modifier.padding(top = 12.dp)) { preview() }
@@ -250,8 +267,8 @@ private fun FeatureSettings(
 }
 
 @Composable
-private fun SettingSection(group: String, specs: List<LiteSetting>, values: Map<String, *>, searching: Boolean,
-                           onWrite: (LiteSetting, Any) -> Unit, onEdit: (LiteSetting) -> Unit, onPreview: () -> Unit) {
+internal fun SettingSection(group: String, specs: List<LiteSetting>, values: Map<String, *>, searching: Boolean,
+                           onWrite: (LiteSetting, Any) -> Unit, onEdit: (LiteSetting) -> Unit, onPreview: (() -> Unit)? = null) {
     var expanded by rememberSaveable(group) { mutableStateOf(false) }
     val primary = remember(specs) {
         if (specs.size <= 8) specs else specs.filter { it.isToggle }.take(3) + specs.filterNot { it.isToggle }.take(3)
@@ -260,7 +277,7 @@ private fun SettingSection(group: String, specs: List<LiteSetting>, values: Map<
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { SmallTitle(group) }
-            TextButton("预览", onPreview, minWidth = 0.dp, minHeight = 36.dp, insideMargin = PaddingValues(horizontal = 12.dp, vertical = 6.dp))
+            if (onPreview != null) TextButton("预览", onPreview, minWidth = 0.dp, minHeight = 36.dp, insideMargin = PaddingValues(horizontal = 12.dp, vertical = 6.dp))
         }
         Card(Modifier.fillMaxWidth()) {
             (if (expanded || searching) specs else primary).forEach { spec ->
@@ -338,7 +355,7 @@ private fun Presets(onExport: () -> Unit, onImport: () -> Unit, onReset: () -> U
 private fun PreviewPanel(repository: SettingsRepository, revision: Int, scene: Int, onScene: (Int) -> Unit,
                          focus: String, night: Boolean, onNight: () -> Unit, replay: Int, onReplay: () -> Unit,
                          wallpaperUri: String?, wallpaperStyle: Int, onBackground: () -> Unit, height: Int,
-                         materialComparison: Boolean = false) {
+                         materialComparison: Boolean = false, compact: Boolean = false) {
     // Store applied values separately from Compose state: AndroidView.update must not
     // rebuild the scene on unrelated recompositions or reuse a permanently released view.
     class Applied(initialReplay: Int) {
@@ -352,19 +369,21 @@ private fun PreviewPanel(repository: SettingsRepository, revision: Int, scene: I
     }
     val applied = remember { Applied(replay) }
     var nativeMaterial by remember { mutableStateOf<Boolean?>(null) }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Card(Modifier.fillMaxWidth()) {
-            BasicComponent(title = when (nativeMaterial) {
-                true -> "原生材质接口已调用"
-                false -> "当前为示意预览"
-                null -> "正在准备材质预览"
-            }, summary = if (nativeMaterial == false)
-                "示意图无法表现完整模糊与折射，请以系统面板为准。"
-            else "这是 App 内预览，不代表系统作用域已加载。")
-        }
-        Card(Modifier.fillMaxWidth()) {
-            WindowDropdownPreference(title = "预览场景", items = GlassPlayground.Scene.entries.map { it.title },
-                selectedIndex = scene, onSelectedIndexChange = onScene)
+    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 10.dp)) {
+        if (!compact) {
+            Card(Modifier.fillMaxWidth()) {
+                BasicComponent(title = when (nativeMaterial) {
+                    true -> "原生材质接口已调用"
+                    false -> "当前为示意预览"
+                    null -> "正在准备材质预览"
+                }, summary = if (nativeMaterial == false)
+                    "示意图无法表现完整模糊与折射，请以系统面板为准。"
+                else "这是 App 内预览，不代表系统作用域已加载。")
+            }
+            Card(Modifier.fillMaxWidth()) {
+                WindowDropdownPreference(title = "预览场景", items = GlassPlayground.Scene.entries.map { it.title },
+                    selectedIndex = scene, onSelectedIndexChange = onScene)
+            }
         }
         AndroidView(factory = { context -> GlassPlayground(context, repository.preferences).also { view ->
             view.onMaterialStatusChanged = { nativeMaterial = it }
@@ -385,16 +404,29 @@ private fun PreviewPanel(repository: SettingsRepository, revision: Int, scene: I
                 if (applied.revision != revision) { view.refresh(); applied.revision = revision }
                 if (applied.replay != replay) { view.replay(); applied.replay = replay }
             })
+        if (compact) Text(
+            text = when (nativeMaterial) {
+                true -> "原生接口已调用 · App 内预览"
+                false -> "示意预览 · 模糊与折射以系统面板为准"
+                null -> "正在准备材质预览"
+            },
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(if (night) "夜间" else "日间", onNight, Modifier.weight(1f), minWidth = 0.dp)
-            TextButton("背景", onBackground, Modifier.weight(1f), minWidth = 0.dp)
-            TextButton("重播", onReplay, Modifier.weight(1f), minWidth = 0.dp)
+            TextButton(if (night) "夜间" else "日间", onNight, Modifier.weight(1f), minWidth = 0.dp, minHeight = if (compact) 36.dp else 48.dp,
+                insideMargin = PaddingValues(horizontal = 8.dp, vertical = if (compact) 4.dp else 8.dp))
+            TextButton("背景", onBackground, Modifier.weight(1f), minWidth = 0.dp, minHeight = if (compact) 36.dp else 48.dp,
+                insideMargin = PaddingValues(horizontal = 8.dp, vertical = if (compact) 4.dp else 8.dp))
+            TextButton("重播", onReplay, Modifier.weight(1f), minWidth = 0.dp, minHeight = if (compact) 36.dp else 48.dp,
+                insideMargin = PaddingValues(horizontal = 8.dp, vertical = if (compact) 4.dp else 8.dp))
         }
     }
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     Text(text, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), fontSize = 13.sp,
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
 }
