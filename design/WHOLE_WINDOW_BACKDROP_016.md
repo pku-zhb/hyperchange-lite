@@ -51,8 +51,10 @@ alpha is zero. Its native inputs remain retained for a same-scene restoration;
 card materials remain independent throughout.
 
 The preblurred-screenshot fallback cannot have its baked radius changed by the
-compositor adapter. Do not claim radius equivalence for that fallback without a
-separate native snapshot adapter and device evidence.
+compositor adapter. The explicit 0/0 endpoint hides only that dedicated native
+background View after its normal update; leaving the endpoint reruns the native
+update to restore its current alpha. Intermediate blur percentages do not imply
+radius equivalence for the preblurred bitmap.
 
 ## Admission and refresh
 
@@ -84,6 +86,12 @@ radius. An invalid surface does not cause this feature to start an OEM retry
 loop. View-setter refresh retains its existing generation, ownership, parent,
 reentry and stale-replay checks. Closing a panel retires historical backdrop
 inputs; it never replays them into a heads-up-only or lockscreen window.
+
+The current `ShadeSolidBackgroundController.updateWindow` is the final refresh
+writer. Its native `setBackground(null)` retires only the plain-color baseline,
+so switching from a solid fallback to compositor blur cannot resurrect a stale
+color on a later parameter edit. The native Lazy background is resolved only
+after the controller has already used it, preserving startup order.
 
 ## Verification boundary
 

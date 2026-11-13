@@ -35,7 +35,8 @@ private class SystemGlass(private val runtime: HookRuntime) {
         notificationPolicy().force(GlassSurfaces.media(view), NotificationScope.sceneAllows(view),
             NotificationScope.role(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
     }
-    private val window = WindowBackdropHooks(runtime) { state.shadeGlass }
+    private val window = WindowBackdropHooks(runtime, { state.shadeGlass }, ::nativeBackdropBackground)
+    private fun nativeBackdropBackground(view: android.view.View) = engine.observeNativeBackdropBackground(view)
     private val engine = ViewMaterialEngine(runtime, { GlassSurfaces.classify(it) != null }, { view ->
         val surface = GlassSurfaces.classify(view)
         val backdrop = surface == GlassSurface.SHADE || GlassSurfaces.isShadeWindow(view)

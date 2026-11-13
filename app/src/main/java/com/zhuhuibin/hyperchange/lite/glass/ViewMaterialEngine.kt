@@ -114,6 +114,13 @@ internal class ViewMaterialEngine(
         }
     }
 
+    /** Only the current native SolidBackgroundController supplies this observation. */
+    fun observeNativeBackdropBackground(view: View) {
+        if (isBackdrop(view) && view.background == null) synchronized(baselines) {
+            baselines[view]?.keys?.removeAll { it.name == "setBackgroundColor" }
+        }
+    }
+
     fun install() {
         setter("setMiGlass", FloatArray::class.java)
         setter("setMiGlassBlurRadius", Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!)

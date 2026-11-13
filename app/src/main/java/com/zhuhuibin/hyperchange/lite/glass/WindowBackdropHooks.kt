@@ -16,7 +16,8 @@ import java.util.WeakHashMap
  * not to View.setMiBackgroundBlurRadius. Admit only that native controller's run.
  */
 internal class WindowBackdropHooks(private val runtime: HookRuntime,
-                                  private val settings: () -> SoftGlassSettings) {
+                                  private val settings: () -> SoftGlassSettings,
+                                  private val nativeBackground: (View) -> Unit) {
     private val calls = WindowBackdropCallGuard<View>({ ShadeScope.generation }) {
         it.isAttachedToWindow && ShadeScope.allows(it)
     }
@@ -29,6 +30,7 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
         viewRoot?.returnType?.getMethod("getSurfaceControl")?.apply { isAccessible = true }
     }.getOrNull()
     private val rebinders = mutableListOf<() -> Unit>()
+    private var solidRefresh: (() -> Unit)? = null
     private var refresh: Runnable? = null
     private var installed = false
 
@@ -37,6 +39,7 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
         // Provider identity is useful even when an unknown ROM has no compositor adapter.
         installProvider()
         installBlendRefresh()
+        installSolidRefresh()
         val task = runtime.type("com.miui.systemui.shade.blur.ShadeWindowBlurController\$updateBlurRatioRunnable\$1") ?: return
         val blur = runtime.type("com.android.systemui.statusbar.BlurUtils") ?: return
         val owner = runCatching { task.getDeclaredField("this\$0").apply { isAccessible = true } }.getOrNull() ?: return
@@ -97,6 +100,42 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
         }
     }
 
+    private fun installSolidRefresh() {
+        val type = runtime.type("com.miui.systemui.shade.blur.ShadeSolidBackgroundController") ?: return
+        val field = runCatching { type.getDeclaredField("windowBackground").apply { isAccessible = true } }.getOrNull() ?: return
+        val get = runCatching { field.type.getMethod("get").apply { isAccessible = true } }.getOrNull() ?: return
+        val update = runCatching { type.getDeclaredMethod("updateWindow").apply { isAccessible = true } }.getOrNull() ?: return
+        val owners = WeakHashMap<Any, WeakReference<View>>()
+        runtime.hook(update, "window-backdrop:solid-current") { chain ->
+            val result = chain.proceed()
+            runCatching {
+                val owner = chain.thisObject ?: return@runCatching
+                // Resolve only after the OEM has used this Lazy, preserving startup order.
+                val view = get.invoke(field.get(owner)) as? View ?: return@runCatching
+                synchronized(owners) { owners[owner] = WeakReference(view) }
+                nativeBackground(view)
+                val epoch = ShadeScope.generation
+                if (WindowBackdropPolicy.transparent(settings()) && view.isAttachedToWindow &&
+                    ShadeScope.allows(view) && epoch == ShadeScope.generation) {
+                    // Also removes the OEM's preblurred screenshot fallback at the
+                    // explicit transparent endpoint; never multiply a card's alpha.
+                    view.alpha = 0f
+                }
+            }.onFailure { runtime.log("Solid backdrop retained native state", it) }
+            result
+        }
+        solidRefresh = {
+            val current = synchronized(owners) { owners.entries.map { it.key to it.value.get() } }
+            current.forEach { (owner, view) ->
+                if (view != null && view.isAttachedToWindow && ShadeScope.allows(view)) {
+                    val epoch = ShadeScope.generation
+                    if (get.invoke(field.get(owner)) === view && epoch == ShadeScope.generation)
+                        update.invoke(owner)
+                }
+            }
+        }
+    }
+
     /** Retain native writers weakly; never turn a missing baseline into a stale replay. */
     private fun track(type: Class<*>, field: Field, id: String, methods: Set<String>,
                       write: (Any, View, () -> Boolean) -> Unit) {
@@ -154,6 +193,10 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
                         .onFailure { runtime.log("Window backdrop refresh retained native state", it) }
                 }
             }
+            // Last writer is the OEM's current solid/screenshot decision, including
+            // its native background clear. An old color baseline cannot resurrect it.
+            solidRefresh?.let { rebind -> runCatching(rebind)
+                .onFailure { runtime.log("Solid backdrop refresh cancelled safely", it) } }
         }.also { handler.postDelayed(it, 16L) }
     }
 }
