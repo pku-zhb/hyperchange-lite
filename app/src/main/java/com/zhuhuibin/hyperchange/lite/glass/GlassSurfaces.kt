@@ -87,6 +87,9 @@ internal object GlassSurfaces {
         // media first so none of those setters can fall into the ordinary range.
         if (media(view)) return GlassSurface.NOTIFICATION
         if (name.contains("NotificationBackgroundView") || (resource in mediaIds && media(view))) return GlassSurface.NOTIFICATION
+        // HyperChanger's isNotificationRowBackground selects the background class,
+        // not every row child. Reused IDs/ancestors cannot make a row child a panel backdrop.
+        if (row(view) != null) return null
         if (resource in shadeIds || name.contains("ShadeBackground") || name.contains("NotificationPanelBackground") || name.contains("ControlCenterBackground")) return GlassSurface.SHADE
         if (lineage(view).any { candidate ->
                 val n = candidate.javaClass.name

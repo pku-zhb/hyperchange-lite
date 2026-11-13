@@ -47,6 +47,12 @@ internal object NotificationScope {
         return if (GlassSurfaces.headsUp(view)) NotificationRole.HEADS_UP else NotificationRole.ORDINARY
     }
 
+    /** Whole-window effects require a confirmed foreground shade, independently of card permissions. */
+    fun confirmedUnlocked(): Boolean {
+        refreshSnapshot()
+        return scene.confirmedUnlocked
+    }
+
     fun sceneAllows(view: View): Boolean {
         decision(view)?.let { return it.allowed }
         refreshSnapshot()

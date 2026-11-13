@@ -84,6 +84,15 @@ This round changes only the App preview path:
 - L/preview/GlassPlayground.kt:963–972 uses no Drawable background or stroke on a
   native-success sample. The schematic fallback retains a distinct gradient.
 
+## Subsequent 0.1.3 ownership correction
+
+Whole-background admission is now intentionally stricter than the original HC
+controller-call-stack guard and the earlier Lite window-identity guard. A real
+expanded unlocked panel is required; a heads-up-visible window does not qualify.
+Old backdrop snapshots retire on close/replacement rather than replaying into a
+later heads-up session. Core conversion and preset data remain unchanged. See
+[shade background ownership](SHADE_BACKGROUND_SCOPE.md) for evidence and acceptance.
+
 ## Remaining preview differences
 
 The App still uses the normal-notification recipe for every local scene. Its

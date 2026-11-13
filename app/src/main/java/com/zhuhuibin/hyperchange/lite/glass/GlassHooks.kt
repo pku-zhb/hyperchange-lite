@@ -4,6 +4,7 @@ package com.zhuhuibin.hyperchange.lite.glass
 import android.content.SharedPreferences
 import com.zhuhuibin.hyperchange.lite.HookRuntime
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
+import com.zhuhuibin.hyperchange.lite.scope.ShadeScope
 
 /** A single native setter owner for SystemUI and its control-center plugin. */
 object GlassHooks {
@@ -51,8 +52,13 @@ private class SystemGlass(private val runtime: HookRuntime) {
         else null
     }, normal::normalBlends, { view -> if (GlassSurfaces.classify(view) == GlassSurface.VOLUME) 0.48f else 0f },
         scopeAllows = { view ->
-            GlassSurfaces.classify(view) != GlassSurface.NOTIFICATION ||
-                (notificationRange(view) && (state.glass.enabled || normal.shouldUnify(view)))
+            when {
+                GlassSurfaces.classify(view) == GlassSurface.NOTIFICATION ->
+                    notificationRange(view) && (state.glass.enabled || normal.shouldUnify(view))
+                GlassSurfaces.classify(view) == GlassSurface.SHADE || GlassSurfaces.isShadeWindow(view) ->
+                    ShadeScope.allows(view)
+                else -> true
+            }
         }, nativeNotificationRefresh = normal::requestRefresh)
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key.startsWith("glass_")) {
@@ -65,6 +71,10 @@ private class SystemGlass(private val runtime: HookRuntime) {
     fun install() {
         NotificationScope.install(runtime)
         NotificationScope.addListener { refresh(sceneOnly = true) }
+        ShadeScope.addListener {
+            engine.retireInactiveBackdrops()
+            engine.scheduleRefresh(sceneOnly = true)
+        }
         runtime.preferences.registerOnSharedPreferenceChangeListener(listener)
         engine.install()
     }
@@ -72,5 +82,8 @@ private class SystemGlass(private val runtime: HookRuntime) {
         runCatching { normal.refresh(sceneOnly) }.onFailure { runtime.log("Notification material refresh cancelled safely", it) }
         engine.scheduleRefresh(sceneOnly)
     }
-    fun installEffects(loader: ClassLoader) = normal.installEffects(loader)
+    fun installEffects(loader: ClassLoader) {
+        ShadeScope.install(HookRuntime(runtime.module, loader, runtime.preferences, runtime.packageName))
+        normal.installEffects(loader)
+    }
 }
