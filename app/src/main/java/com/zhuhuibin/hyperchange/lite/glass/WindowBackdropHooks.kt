@@ -49,7 +49,7 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
         val apply = blur.declaredMethods.singleOrNull { it.name == "applyBlur" && it.returnType == Void.TYPE &&
             it.parameterTypes.size == 2 && it.parameterTypes[0].name == "android.view.ViewRootImpl" &&
             it.parameterTypes[1] == Int::class.javaPrimitiveType } ?: return
-        if (viewRoot == null) return
+        val rootMethod = viewRoot ?: return
         runtime.hook(run, "window-backdrop:native-task") { chain ->
             val runnable = chain.thisObject as? Runnable ?: return@hook chain.proceed()
             val view = runCatching {
@@ -57,7 +57,7 @@ internal class WindowBackdropHooks(private val runtime: HookRuntime,
             }.getOrNull()
             if (view != null) synchronized(sources) { sources[runnable] = WeakReference(view) }
             val admitted = view?.takeIf { settings().enabled }
-            val root = admitted?.let { runCatching { viewRoot.invoke(it) }.getOrNull() }
+            val root = admitted?.let { runCatching { rootMethod.invoke(it) }.getOrNull() }
             calls.during(admitted, root) { chain.proceed() }
         }
         runtime.hook(apply, "window-backdrop:compositor-radius") { chain ->
