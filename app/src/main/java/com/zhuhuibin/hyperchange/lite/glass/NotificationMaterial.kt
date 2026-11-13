@@ -17,6 +17,7 @@ internal class NotificationMaterial(
     private val runtime: HookRuntime,
     private val permitted: (View) -> Boolean,
     private val tuning: () -> Boolean,
+    private val headsUpSelected: (View) -> Boolean = { false },
     private val selected: (View) -> Boolean,
 ) {
     private data class Recipe(val configuration: Int, val values: FloatArray)
@@ -24,6 +25,7 @@ internal class NotificationMaterial(
     private val applying = ThreadLocal<Boolean>()
     private val knownRoots = WeakHashMap<View, NotificationScopeToken>()
     private val forcedRoots = WeakHashMap<View, MaterialOwnership>()
+    private val convertedHeadsUpRoots = WeakHashMap<View, MaterialOwnership>()
     private class Pending(val job: Runnable, val scope: NotificationScopeToken)
     private val pending = WeakHashMap<View, Pending>()
     private val refreshedRoots = NativeMaterialRefreshes<View, NotificationScopeToken>()
@@ -40,11 +42,13 @@ internal class NotificationMaterial(
     private fun active(view: View): Boolean = !GlassSurfaces.excluded(view) && permitted(view) &&
         (tuning() || shouldUnify(view))
 
-    fun normalRecipe(view: View): FloatArray? {
+    fun normalRecipe(view: View): FloatArray? = normalRecipe(view.context)
+
+    private fun normalRecipe(context: Context): FloatArray? {
         val resource = runCatching {
-            val local = view.resources
+            val local = context.resources
             if (local.getIdentifier("notification_glass_params_normal", "array", "com.android.systemui") != 0) local
-            else view.context.createPackageContext("com.android.systemui", 0).resources
+            else context.createPackageContext("com.android.systemui", 0).resources
         }.getOrNull() ?: return null
         val configuration = resource.configuration.hashCode()
         synchronized(recipes) { recipes[resource]?.takeIf { it.configuration == configuration }?.let { return it.values.copyOf() } }
@@ -73,6 +77,7 @@ internal class NotificationMaterial(
     fun installEffects(loader: ClassLoader) {
         if (installedLoaders.put(loader, true) != null) return
         native.install(loader)
+        installHeadsUpEffects(loader)
         val focus = listOf("FocusNotificationNormalEffect", "FocusNotificationNormalCustomBgEffect", "FocusNotificationBlurEffect", "FocusNotificationBlurOnKeyguardEffect", "FocusNotificationGlassEffect", "FocusNotificationGlassCustomBgEffect", "FocusNotificationGlassOnKeyguardEffect", "FocusNotificationGlassOnKeyguardLightWallPaperEffect", "FocusNotificationGlassFullAodEffect")
         val media = listOf("MediaViewNormalEffect", "MediaViewBlurEffect", "MediaViewBlurOnKeyguardEffect", "MediaViewGlassEffect", "MediaViewGlassOnKeyguardEffect", "MediaViewGlassOnKeyguardLightWallPaperEffect", "MediaViewGlassFullAodEffect")
         var found = 0
@@ -108,6 +113,80 @@ internal class NotificationMaterial(
         runtime.log("Native notification material effects installed: $found")
     }
 
+    private fun headsUpAllowed(view: View): Boolean = headsUpSelected(view) && permitted(view) &&
+        !GlassSurfaces.excluded(view) && !GlassSurfaces.media(view) && NotificationScope.confirmedUnlocked()
+
+    /** Original HC's opt-in path: normal row blur/blends plus its normal glass resource. */
+    private fun installHeadsUpEffects(loader: ClassLoader) = runCatching {
+        val blur = loader.loadClass(effectPrefix + "NotificationRowBlurEffect")
+        val singleton = blur.getField("INSTANCE").get(null)
+        val apply = blur.declaredMethods.filter { it.name == "apply" && it.parameterCount == 2 &&
+            it.parameterTypes[1] == Context::class.java }.minByOrNull { if (it.parameterTypes[0] == Any::class.java) 1 else 0 }
+            ?.apply { isAccessible = true } ?: return@runCatching
+        val clear = blur.declaredMethods.filter { it.name == "clear" && it.parameterCount == 1 }
+            .minByOrNull { if (it.parameterTypes[0] == Any::class.java) 1 else 0 }
+            ?.apply { isAccessible = true } ?: return@runCatching
+        val compat = loader.loadClass("com.miui.systemui.util.MiGlassCompat")
+        val glass = compat.getMethod("setMiGlassCompat", View::class.java, FloatArray::class.java)
+        val material = compat.getMethod("setMiViewMaterialTypeCompat", Int::class.javaPrimitiveType, View::class.java)
+        fun dispatch(root: View, context: Context, clearing: Boolean): Boolean {
+            // A converted plain-blur effect has no native glass-clear step. Retire
+            // our token with the exact zero recipe used by the OEM HU glass clear,
+            // even if a later resource/theme no longer exposes the normal recipe.
+            val recipe = if (clearing) FloatArray(42) else normalRecipe(context) ?: return false
+            val ticket = generation.value
+            val scene = NotificationScope.token(root)
+            applying.set(true)
+            return try {
+                if (clearing) clear.invoke(singleton, root) else apply.invoke(singleton, root, context)
+                if (!clearing && !generation.current(ticket,
+                        headsUpAllowed(root) && NotificationScope.isCurrent(root, scene))) return false
+                // The native blur effect updates the row's background first. Resolve
+                // its current target afterwards, exactly as the upstream dispatch does.
+                val injector = root.javaClass.getMethod("getInjector").invoke(root) ?: return false
+                val background = injector.javaClass.getMethod("getBackgroundNormal").invoke(injector) as? View ?: return false
+                glass.invoke(null, background, recipe)
+                material.invoke(null, if (clearing) 0 else 1, background)
+                true
+            } finally { applying.remove() }
+        }
+        listOf("HeadsUpNotificationBlurEffect", "HeadsUpNotificationGlassEffect", "HeadsUpNotificationGlassDarkEffect").forEach { name ->
+            val effect = loader.loadClass(effectPrefix + name)
+            effect.declaredMethods.filter { it.name == "apply" && it.parameterCount == 2 &&
+                it.parameterTypes[1] == Context::class.java }.forEachIndexed { index, method ->
+                runtime.hook(method, "lite-material:heads-up:$name:$index") { chain ->
+                    val root = chain.getArg(0) as? View
+                    val context = chain.getArg(1) as? Context
+                    if (root == null || context == null || applying.get() == true) return@hook chain.proceed()
+                    synchronized(knownRoots) { knownRoots[root] = NotificationScope.token(root) }
+                    if (headsUpAllowed(root)) {
+                        val converted = runCatching { dispatch(root, context, false) }
+                            .onFailure { logOnce("Heads-up glass conversion retained the native effect", it) }.getOrDefault(false)
+                        if (converted) {
+                            synchronized(convertedHeadsUpRoots) { convertedHeadsUpRoots[root] = MaterialOwnership(root) }
+                            return@hook null
+                        }
+                    }
+                    synchronized(convertedHeadsUpRoots) { convertedHeadsUpRoots.remove(root) }
+                    chain.proceed()
+                }
+            }
+            effect.declaredMethods.filter { it.name == "clear" && it.parameterCount == 1 }.forEachIndexed { index, method ->
+                runtime.hook(method, "lite-material:heads-up-clear:$name:$index") { chain ->
+                    val root = chain.getArg(0) as? View
+                    if (root == null || applying.get() == true) return@hook chain.proceed()
+                    val ownership = synchronized(convertedHeadsUpRoots) { convertedHeadsUpRoots.remove(root) }
+                    // The current OEM selector clears its previous effect before applying
+                    // the next one. A stale clear outside that exact root scope cannot
+                    // clear a newer owner merely because its background object is reused.
+                    if (ownership != null && (ownership.stillOwned() || native.selecting(root)) &&
+                        runCatching { dispatch(root, root.context, true) }.getOrDefault(false)) null
+                    else chain.proceed()
+                }
+            }
+        }
+    }.onFailure { logOnce("Heads-up glass contract unavailable; native banner retained", it) }.let { Unit }
+
     /** Invalidate late work, then let today's binder choose its keyguard/AOD/theme effect. */
     fun refresh(sceneOnly: Boolean = false) {
         if (!sceneOnly) generation.invalidate()
@@ -127,6 +206,20 @@ internal class NotificationMaterial(
             } else false
             if (canForgetMaterialState(allowed, stillOwned, transferred)) synchronized(forcedRoots) {
                 if (forcedRoots[view] === ownership) forcedRoots.remove(view)
+            }
+        }
+        val headsUp = synchronized(convertedHeadsUpRoots) {
+            convertedHeadsUpRoots.filter { (view, ownership) -> !sceneOnly || !ownership.scopeCurrent(view) }
+        }
+        headsUp.forEach { (view, ownership) ->
+            val allowed = headsUpAllowed(view)
+            val stillOwned = ownership.stillOwned()
+            val transferred = if (!allowed && stillOwned) {
+                val reference = WeakReference(view)
+                requestRefresh(view, true) { reference.get()?.let { !headsUpAllowed(it) && ownership.stillOwned() } == true }
+            } else false
+            if (canForgetMaterialState(allowed, stillOwned, transferred)) synchronized(convertedHeadsUpRoots) {
+                if (convertedHeadsUpRoots[view] === ownership) convertedHeadsUpRoots.remove(view)
             }
         }
         // The OEM binder has seen ordinary rows and media even while our tuning

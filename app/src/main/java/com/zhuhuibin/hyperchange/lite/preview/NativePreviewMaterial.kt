@@ -13,12 +13,14 @@ import com.zhuhuibin.hyperchange.lite.glass.softGlassBlur
 import com.zhuhuibin.hyperchange.lite.glass.softGlassColorAlpha
 import com.zhuhuibin.hyperchange.lite.glass.softGlassScale
 import com.zhuhuibin.hyperchange.lite.glass.tuneSoftGlass
+import com.zhuhuibin.hyperchange.lite.glass.headsUpGlassAllowed
 import java.lang.reflect.Method
 
 internal data class PreviewMaterialState(
     val settings: SoftGlassSettings,
     val scopeStatus: String,
     val scopeNote: String,
+    val headsUpGlass: Boolean = false,
 )
 
 /** The preview is an unlocked local sample, never a simulated SystemUI scope. */
@@ -68,7 +70,8 @@ internal fun previewMaterialState(
         "WIDGET" -> "独立于系统柔光开关；系统组件配方未还原"
         else -> "正常通知配方样例；未还原系统场景配方"
     }
-    return PreviewMaterialState(settings, status, note)
+    return PreviewMaterialState(settings, status, note, scene == "HEADS_UP" &&
+        headsUpGlassAllowed(enabled("glass_heads_up"), saved.enabled, range, confirmedUnlocked = true))
 }
 
 internal data class PreviewSamplingInputs(
@@ -108,20 +111,22 @@ internal fun previewRadius(
 internal class NativePreviewMaterial(private val context: Context) {
     private data class Recipe(val glass: FloatArray, val blends: List<Point>)
     private var recipe: Recipe? = null
+    private var headsUpRecipe: Recipe? = null
     private var backdropBlends: List<Point>? = null
     private var night = false
     private var resolved = false
     private val methods = HashMap<String, Method?>()
 
     fun setNight(value: Boolean) {
-        if (night != value) { night = value; resolved = false; recipe = null; backdropBlends = null }
+        if (night != value) { night = value; resolved = false; recipe = null; headsUpRecipe = null; backdropBlends = null }
     }
 
-    fun apply(view: View, glass: SoftGlassSettings, scene: String = "NOTIFICATION"): Boolean {
+    fun apply(view: View, glass: SoftGlassSettings, scene: String = "NOTIFICATION", headsUpGlass: Boolean = false): Boolean {
         if (!resolved) resolveRecipe()
         if (view.width <= 0 || view.height <= 0 || !view.isHardwareAccelerated) return false
         if (scene == "SHADE") return applyBackdrop(view, glass)
-        val original = recipe ?: run { clear(view); return false }
+        val original = (if (scene == "HEADS_UP" && !headsUpGlass) headsUpRecipe else recipe)
+            ?: run { clear(view); return false }
         val inputs = previewSamplingInputs(glass, wholeWindow = false)
         return runCatching {
             // The test chart is inside this Activity. Use the OEM local-content
@@ -205,6 +210,15 @@ internal class NativePreviewMaterial(private val context: Context) {
                 Point(resources.getColor(color, null), resources.getInteger(mode))
             }
             Recipe(glass, blends)
+        }.getOrNull()
+        headsUpRecipe = runCatching {
+            val blends = (1..2).map { index ->
+                val color = resources.getIdentifier("notification_element_blend_headsUp_color_$index", "color", "com.android.systemui")
+                val mode = resources.getIdentifier("notification_element_blend_headsUp_mode_$index", "integer", "com.android.systemui")
+                check(color != 0 && mode != 0) { "Heads-up blend resources are unavailable" }
+                Point(resources.getColor(color, null), resources.getInteger(mode))
+            }
+            Recipe(headsUpPreviewRecipe(night), blends)
         }.getOrNull()
         backdropBlends = runCatching {
             val id = resources.getIdentifier("shade_blend_colors_bionics", "array", "com.android.systemui")

@@ -21,6 +21,21 @@ class NotificationAccessorCacheTest {
         private fun fails(): Nothing = throw IllegalStateException("native failure")
     }
     private class Other { private val hidden = "other" }
+    private class Positive : java.util.function.Predicate<Int> {
+        override fun test(value: Int): Boolean = value > 0
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun inheritedPublicInterfaceDefaultsAreResolvedAndCached() {
+        val cache = NotificationAccessorCache()
+        val method = requireNotNull(cache.method(Positive::class.java, "negate", emptyArray()))
+        assertTrue(method.isDefault)
+        assertEquals(java.util.function.Predicate::class.java, method.declaringClass)
+        val inverted = method.invoke(Positive()) as java.util.function.Predicate<Int>
+        assertFalse(inverted.test(1))
+        assertTrue(inverted.test(-1))
+        repeat(100) { assertSame(method, cache.method(Positive::class.java, "negate", emptyArray())) }
+    }
 
     @Test fun repeatedHitsAndMissingFieldsScanEachClassAndNameOnlyOnce() {
         val attempts = AtomicInteger()

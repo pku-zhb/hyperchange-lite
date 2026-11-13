@@ -43,10 +43,12 @@ state, window-expanded flags, shared GPU configuration, or compositor transactio
   historical zero/200 cannot silently zoom the underlying App.
 
 When both visible values are zero, tuning clears only the admitted whole-panel
-sampler's blur mode, known glass token and blend recipe. Native scale remains
-unchanged; disabling the sampler removes its visual scaling. Leaving a structural
-transform or optical token active can still alter the App even when blur/tint
-alpha is zero. Its native inputs remain retained for a same-scene restoration;
+sampler's background-blur mode and the dedicated blend background's view-blur
+mode, and clears its blend colors. Its native glass token and scale are preserved.
+This follows the OEM's own disabled-provider/disabled-blend sequence rather than
+erasing a glass token that may only be written again on a theme change. Native
+sampling and dual glass radii are zero at this endpoint. Its native inputs remain
+retained for a same-scene restoration;
 100/100 or disabling tuning returns those current native inputs. Foreground
 card materials remain independent throughout.
 
@@ -123,3 +125,68 @@ phone. Device acceptance should compare a pulled-down notification center and
 control center over the same App at 100/100 and 0/0; card appearance should remain
 unchanged, closing should restore the App, and a top banner alone must not alter
 its background.
+
+## Shared sampler release after a transparent panel
+
+The retained notification-combine flow has seven inputs: unoccluded notification
+state, notification ratio, MiBlur enabled, keyguard showing, heads-up showing,
+flip-screen state and visible-notification state. With MiBlur enabled and the
+phone unlocked, either unoccluded notifications or heads-up showing selects ratio
+1. Thus expanding the shade at 1 and closing it while a heads-up remains can leave
+the StateFlow unchanged. The R8 collector writes a provider's background-blur mode
+only when its `enabled` Boolean changes. `BlendBackground.setEnabled` has the same
+Boolean early return for its view-blur mode and blend colors. A native card does
+not necessarily repair those shared sampler modes itself.
+
+A strict admission gate prevents new out-of-scope edits but does not release an
+already applied zero. Changed-channel ownership is therefore separate from the historical setter
+baseline. The engine observes native writes on registered receivers, including
+visually equal writes outside the shade scope. Only actual adjusted arguments or
+suppressed blend additions claim a write stamp. Each claim weakly identifies its
+exact native owner, View and ViewRootImpl. Current plain-color claims additionally
+check their Drawable identity and color; compositor claims check the original
+SurfaceControl identity and validity. A newer native write, replacement identity
+or detach retires the claim without writing.
+
+On master-off or scope revocation, still-owned changed channels request one
+current native batch per exact owner/View/root. A provider submits its current
+`enabled` mode decision only if that mode is owned, and invokes native
+`updateMaxRadius` when a sampling or glass-radius channel is owned. The blend
+owner similarly restores only owned mode/color groups with `applyBlendColors`.
+The solid owner runs `updateWindow`; a compositor claim reruns only its exact
+current Runnable after verifying its original SurfaceControl is still valid.
+No historical mode, radius, color, or glass token is replayed.
+
+Candidate selection does not consume delivery responsibility. Immediately before
+a group enters native code it rechecks the scene epoch and every channel stamp,
+then consumes once. The epoch and target identities remain checked between native
+submissions. If a phase change cancels delivery without native supersession,
+still-current claims remain queued for reassessment; a replaced target is never
+revived. Releases run before normal scoped refresh and do not expand the general
+tuning scope to heads-up, keyguard or AOD.
+
+The same ledger covers partial nonzero radius/tint tuning as well as 0/0.
+Known covered paths are compositor `applyBlur`, provider background mode/radius
+and dual glass radii, blend view mode and batch/legacy blend colors, and solid
+background color. The OEM's `MiBlurCompat.setMiBackgroundBlendColors` clears the
+legacy list then adds each resource color/mode; replacing/clearing the list
+supersedes its earlier entry claims. Unchanged pass-window flags, native scale
+and native glass tokens have no fabricated ownership or release. An unregistered
+whole-window setter with no known current writer remains native.
+
+Focused host tests cover unchanged enabled state across shade-to-heads-up,
+current enabled/disabled decisions, equal-value native supersession, target
+replacement, exact valid SurfaceControl, detach, failure, reentry and cancelled
+candidate delivery. The retained framework's radius, blend, view-mode and glass
+radius setters directly update RenderNode/bookkeeping, rather than synchronously
+calling user callbacks. Entry stamps are conservative if an unknown third-party
+hook introduces same-channel reentry. Arbitrary direct private RenderNode or
+SurfaceControl writes are outside this contract; no phone visual result is
+claimed by these host tests.
+
+With the exact native adapter installed, ViewMaterialEngine skips direct replay
+of historical SHADE setter/legacy baselines. Such a replay could otherwise
+invalidate a live ownership stamp before the native owner can release it.
+Master-off runs owned-channel and alpha-lease retirement only; ordinary provider,
+blend and window refreshes are gated by the current independent enabled state.
+Foreground card and notification replay behavior remains unchanged.

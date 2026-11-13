@@ -1077,7 +1077,7 @@ class GlassPlayground(context: Context, private val preferences: SharedPreferenc
             radius = if (pill && height > 0) height / 2f else dp(previewRadius(radiusKey, number(radiusKey, baseline), baseline, preferences.all, materialComparison))
             invalidateOutline()
             val state = currentMaterialState()
-            nativeApplied = material.apply(this, state.settings, scene.name)
+            nativeApplied = material.apply(this, state.settings, scene.name, state.headsUpGlass)
             val opacity = if (state.settings.enabled) state.settings.backgroundOpacity / 100f else 1f
             // Native glass owns tint/opacity through its OEM blend colors. A second
             // painted veil would make the editor look cloudier than its system recipe.

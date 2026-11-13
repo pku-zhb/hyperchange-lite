@@ -14,6 +14,9 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
     private val mediaInteractors = WeakHashMap<View, WeakReference<Any>>()
     private val loaders = WeakHashMap<ClassLoader, Boolean>()
     private val refreshing = ThreadLocal<Boolean>()
+    private val selecting = ThreadLocal<View>()
+
+    fun selecting(view: View): Boolean = selecting.get() === view
 
     fun install(loader: ClassLoader) {
         if (loaders.put(loader, true) != null) return
@@ -28,11 +31,18 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
                 .apply { isAccessible = true }
             runtime.hook(update, "lite-material:current-row") { chain ->
                 val row = chain.getArg(1) as? View
+                // A new native selector run supersedes a previous conversion, even
+                // when it reuses the same background object and transition alpha.
+                if (row != null) NotificationMaterialWrites.touch(row)
                 if (row != null && refreshing.get() != true) {
                     val args = Array<Any?>(4) { if (it == 1) null else chain.getArg(it) }
                     synchronized(rows) { rows[row] = RowBinding(update, args) }
                 }
-                chain.proceed()
+                val previous = selecting.get()
+                if (row != null) selecting.set(row)
+                try { chain.proceed() } finally {
+                    if (previous == null) selecting.remove() else selecting.set(previous)
+                }
             }
         }.onFailure { runtime.log("Current notification material selector unavailable", it) }
         runCatching {

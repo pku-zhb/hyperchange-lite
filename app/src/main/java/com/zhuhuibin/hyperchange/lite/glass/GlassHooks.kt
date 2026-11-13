@@ -31,13 +31,15 @@ private class SystemGlass(private val runtime: HookRuntime) {
     )
     private fun notificationRange(view: android.view.View): Boolean =
         notificationPolicy().range(GlassSurfaces.media(view), NotificationScope.sceneAllows(view))
-    private val normal = NotificationMaterial(runtime, ::notificationRange, { state.glass.enabled }) { view ->
+    private val normal = NotificationMaterial(runtime, ::notificationRange, { state.glass.enabled }, {
+        headsUpGlassAllowed(state.headsUp, state.glass.enabled, state.notifications, NotificationScope.confirmedUnlocked())
+    }) { view ->
         notificationPolicy().force(GlassSurfaces.media(view), NotificationScope.sceneAllows(view),
             NotificationScope.role(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
     }
-    private val window = WindowBackdropHooks(runtime, { state.shadeGlass }, ::nativeBackdropBackground)
-    private fun nativeBackdropBackground(view: android.view.View) = engine.observeNativeBackdropBackground(view)
-    private val engine = ViewMaterialEngine(runtime, { GlassSurfaces.classify(it) != null }, { view ->
+    private val window: WindowBackdropHooks = WindowBackdropHooks(runtime, { state.shadeGlass }, ::nativeBackdropBackground)
+    private fun nativeBackdropBackground(view: android.view.View): Unit = engine.observeNativeBackdropBackground(view)
+    private val engine: ViewMaterialEngine = ViewMaterialEngine(runtime, { GlassSurfaces.classify(it) != null }, { view ->
         val surface = GlassSurfaces.classify(view)
         val backdrop = surface == GlassSurface.SHADE || GlassSurfaces.isShadeWindow(view)
         val scopeEnabled = when (surface) {
@@ -64,7 +66,8 @@ private class SystemGlass(private val runtime: HookRuntime) {
                     ShadeScope.allows(view)
                 else -> true
             }
-        }, nativeNotificationRefresh = normal::requestRefresh)
+        }, nativeNotificationRefresh = normal::requestRefresh,
+        nativeBackdropWrite = window::observeNativeWrite, ownBackdropWrite = window::ownWrite)
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key.startsWith("glass_")) {
             val next = GlassRuntimeSettings.read(runtime.preferences)

@@ -125,3 +125,7 @@ internal fun softGlassColorAlpha(color: Int, percent: Int): Int {
     val alpha = ((color ushr 24) * percent.coerceIn(0, 200) / 100f).roundToInt().coerceIn(0, 255)
     return (color and 0x00ffffff) or (alpha shl 24)
 }
+
+/** Banner and ordinary-card tint share one control; volume keeps its OEM alpha owner. */
+internal fun cardBlendOpacity(tuning: Boolean, volume: Boolean, percent: Int): Int =
+    if (!tuning || volume) 100 else percent.coerceIn(0, 200)

@@ -55,6 +55,7 @@ internal data class GlassRuntimeSettings(
     val volume: Boolean,
     val shade: Boolean,
     val unify: Boolean,
+    val headsUp: Boolean,
     val assistant: Boolean,
     val sidebar: Boolean,
     val unifySidebar: Boolean,
@@ -69,7 +70,7 @@ internal data class GlassRuntimeSettings(
                 readSoftGlassSettings(values), shade, values.flag("glass_notifications", true),
                 resolved[SettingsMigration.MEDIA_KEY] as Boolean,
                 values.flag("glass_control_center", true), values.flag("glass_volume", true),
-                shade.enabled, values.flag("glass_unify_notifications", false),
+                shade.enabled, values.flag("glass_unify_notifications", false), values.flag("glass_heads_up", false),
                 values.flag("glass_assistant", false), values.flag("glass_sidebar", false),
                 values.flag("glass_sidebar_unify", false),
             )

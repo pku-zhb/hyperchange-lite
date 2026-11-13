@@ -28,7 +28,11 @@ internal class ViewMaterialEngine(
     // Notification effects must be selected from the current OEM state, never from
     // a baseline saved on the previous keyguard/AOD/theme or another owner's view.
     private val nativeNotificationRefresh: ((View, Boolean, () -> Boolean) -> Boolean)? = null,
+    private val nativeBackdropWrite: ((View, String) -> BackdropWrite?)? = null,
+    private val ownBackdropWrite: ((View, BackdropWrite, Array<Any?>) -> Unit)? = null,
 ) {
+    private val backdropWriteChannels = setOf("setMiBackgroundBlurMode", "setMiViewBlurMode", "setMiBackgroundBlurRadius",
+        "setMiGlassBlurRadius", "setMiBackgroundBlendColors", "setBackgroundColor", "setMiSelfBlur")
     private val baselines = WeakHashMap<View, MutableMap<Method, Array<Any?>>>()
     private val arrayPairs = WeakHashMap<View, Pair<FloatArray, FloatArray>>()
     private val legacyBlends = WeakHashMap<View, ArrayList<Point>>()
@@ -126,6 +130,7 @@ internal class ViewMaterialEngine(
         setter("setMiGlassBlurRadius", Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlurRadius", Int::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlurMode", Int::class.javaPrimitiveType!!)
+        setter("setMiViewBlurMode", Int::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlurScaleRatio", Float::class.javaPrimitiveType!!)
         setter("setMiBackgroundBlendColors", ArrayList::class.java)
         setter("setMiSelfBlur", Int::class.javaPrimitiveType!!, ArrayList::class.java)
@@ -162,13 +167,17 @@ internal class ViewMaterialEngine(
                 // panel closed in a nested callback, passing that argument through
                 // would itself resurrect the old whole-window blur.
                 if (skipBackdropReplay(view)) { forget(view); return@hook null }
+                val backdropWrite = if (name in backdropWriteChannels && blendDispatch.get() != true)
+                    runCatching { nativeBackdropWrite?.invoke(view, name) }.getOrNull() else null
                 val prepared = prepare(view) { surface, scene ->
                     val windowSelfBlur = name == "setMiSelfBlur" && GlassSurfaces.isShadeWindow(view)
                     if (!accepts(view) && !windowSelfBlur) return@prepare null
                     val allowed = scopeAllows(view)
+                    if (isBackdrop(view) && name in backdropWriteChannels && nativeBackdropWrite != null && backdropWrite == null)
+                        return@prepare null
                     if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
                     if (name == "setMiSelfBlur" && !windowSelfBlur && surface != GlassSurface.SHADE) return@prepare null
-                    if (name == "setMiBackgroundBlurMode" && surface != GlassSurface.SHADE) return@prepare null
+                    if ((name == "setMiBackgroundBlurMode" || name == "setMiViewBlurMode") && surface != GlassSurface.SHADE) return@prepare null
                     if (name == "setBackgroundColor" && surface != GlassSurface.SHADE) {
                         // A different owner's plain background supersedes our old material.
                         if (surface == GlassSurface.NOTIFICATION) { NotificationMaterialWrites.touch(view); forget(view) }
@@ -190,6 +199,9 @@ internal class ViewMaterialEngine(
                 val blending = name == "setMiBackgroundBlendColors" || name == "setMiSelfBlur"
                 if (blending) blendDispatch.set(true)
                 val result = try { chain.proceedWith(view, prepared.args) } finally { if (blending) blendDispatch.remove() }
+                if (backdropWrite != null && !sameArgs(prepared.input, prepared.args))
+                    runCatching { ownBackdropWrite?.invoke(view, backdropWrite, prepared.args) }
+                        .onFailure { runtime.log("Could not retain backdrop write ownership", it) }
                 if (current(view, prepared))
                     synchronized(baselines) { if (!sameArgs(prepared.input, prepared.args) || owned.containsKey(view)) owned[view] = Ownership(view) }
                 else forget(view)
@@ -235,9 +247,9 @@ internal class ViewMaterialEngine(
         val output: Array<Any?> = when (name) {
             "setMiGlass" -> {
                 val native = baseline[0] as FloatArray
-                // Whole-panel glass never accepts a card recipe. Its native optical
-                // token is removed only for the explicit fully transparent state.
-                if (isBackdrop(view)) arrayOf(if (WindowBackdropPolicy.transparent(settings)) null else native)
+                // The OEM disables its sampler modes rather than erasing the token.
+                // Preserve it so a later heads-up/theme can reuse its current recipe.
+                if (isBackdrop(view)) arrayOf(native)
                 else {
                     val selected = unifiedRecipe(view)?.takeIf(::hasSoftGlassRecipe) ?: native
                     arrayOf(if (settings.enabled) tuneSoftGlass(selected, settings, contextBrightness = contextBrightness(view)) else selected)
@@ -248,7 +260,8 @@ internal class ViewMaterialEngine(
                 arrayOf(WindowBackdropPolicy.radius(baseline[0] as Int, settings.enabled, percent),
                     WindowBackdropPolicy.radius(baseline[1] as Int, settings.enabled, percent))
             }
-            "setMiBackgroundBlurMode" -> arrayOf(if (isBackdrop(view) && WindowBackdropPolicy.transparent(settings)) 0 else baseline[0])
+            "setMiBackgroundBlurMode", "setMiViewBlurMode" ->
+                arrayOf(if (isBackdrop(view) && WindowBackdropPolicy.transparent(settings)) 0 else baseline[0])
             "setMiBackgroundBlurRadius" -> arrayOf(if (settings.enabled) softGlassBlur(baseline[0] as Int, settings.backgroundBlur) else baseline[0])
             "setMiBackgroundBlurScaleRatio" -> arrayOf(if (isBackdrop(view)) baseline[0] else if (settings.enabled) softGlassScale(baseline[0] as Float, settings.backgroundScale) else baseline[0])
             "setMiBackgroundBlendColors" -> arrayOf(if (isBackdrop(view))
@@ -271,11 +284,10 @@ internal class ViewMaterialEngine(
         return output
     }
 
-    // Volume/heads-up native glass already owns its backdrop alpha; keep the sampler's
-    // points intact to avoid multiplying the same tint twice (upstream behavior).
+    // Volume has its own alpha owner. A banner is still a notification card: its
+    // sampler tint must consume the same background-opacity control as ordinary rows.
     private fun opacity(view: View, settings: SoftGlassSettings): Int =
-        if (!settings.enabled || GlassSurfaces.classify(view) == GlassSurface.VOLUME || GlassSurfaces.headsUp(view)) 100
-        else settings.backgroundOpacity
+        cardBlendOpacity(settings.enabled, GlassSurfaces.classify(view) == GlassSurface.VOLUME, settings.backgroundOpacity)
 
     private fun installLegacyBlend() {
         runCatching {
@@ -284,6 +296,8 @@ internal class ViewMaterialEngine(
             runtime.hook(clearBlend!!, "lite-glass:legacy-clear") { chain ->
                 val view = chain.thisObject as? View
                 if (view != null && skipBackdropReplay(view)) { forget(view); return@hook null }
+                if (view != null && blendDispatch.get() != true)
+                    runCatching { nativeBackdropWrite?.invoke(view, "clearMiBackgroundBlendColor") }
                 if (view != null) prepare(view) { surface, _ ->
                     val allowed = scopeAllows(view)
                     if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
@@ -299,6 +313,8 @@ internal class ViewMaterialEngine(
             runtime.hook(addBlend!!, "lite-glass:legacy-add") { chain ->
                 val view = chain.thisObject as? View ?: return@hook chain.proceed()
                 if (skipBackdropReplay(view)) { forget(view); return@hook null }
+                val backdropWrite = if (blendDispatch.get() != true)
+                    runCatching { nativeBackdropWrite?.invoke(view, "blend-mode:${chain.getArg(1)}") }.getOrNull() else null
                 val prepared = prepare(view) { surface, scene ->
                     val allowed = scopeAllows(view)
                     if (surface == GlassSurface.NOTIFICATION) NotificationMaterialWrites.observe(view, allowed)
@@ -329,6 +345,9 @@ internal class ViewMaterialEngine(
                 // zero. In the explicit transparent state, keep its native baseline
                 // for restoration but do not add it to the render node.
                 val result = if (prepared.suppress) null else chain.proceedWith(view, prepared.args)
+                if (backdropWrite != null && (prepared.suppress || !sameArgs(prepared.input, prepared.args)))
+                    runCatching { ownBackdropWrite?.invoke(view, backdropWrite, prepared.args) }
+                        .onFailure { runtime.log("Could not retain backdrop blend ownership", it) }
                 if (current(view, prepared))
                     synchronized(baselines) { if (prepared.suppress || !sameArgs(prepared.input, prepared.args) || owned.containsKey(view)) owned[view] = Ownership(view) }
                 else forget(view)
@@ -366,6 +385,9 @@ internal class ViewMaterialEngine(
                 if (canForgetMaterialState(allowed, stillOwned, transferred)) forget(view)
             }
             surfaces.forEach { (view, setters) ->
+                // Exact native backdrop owners re-read current state themselves.
+                // Historical replay would supersede their still-owned release stamps.
+                if (nativeBackdropWrite != null && isBackdrop(view)) return@forEach
                 if (view in notificationViews || (if (isBackdrop(view)) !request.backdrops else !request.cards)) return@forEach
                 if (!scopeAllows(view)) { forget(view); return@forEach }
                 if (view.isAttachedToWindow) setters.forEach { (method, args) ->
@@ -375,6 +397,7 @@ internal class ViewMaterialEngine(
                 }
             }
             legacy.forEach { (view, colors) ->
+                if (nativeBackdropWrite != null && isBackdrop(view)) return@forEach
                 if (view in notificationViews || (if (isBackdrop(view)) !request.backdrops else !request.cards)) return@forEach
                 if (!scopeAllows(view)) { forget(view); return@forEach }
                 if (view.isAttachedToWindow && generation.current(ticket, scopeAllows(view))) runCatching {

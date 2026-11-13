@@ -54,6 +54,9 @@ internal class NotificationAccessorCache(
             try { return declaredMethod(type, name, parameters).apply { isAccessible = true } }
             catch (_: NoSuchMethodException) { type = type.superclass }
         }
-        return null
+        // Current OEM injectors inherit scheduleUpdateProperties from an interface
+        // default. getDeclaredMethod on the class hierarchy cannot see that method.
+        return try { start.getMethod(name, *parameters).apply { isAccessible = true } }
+        catch (_: NoSuchMethodException) { null }
     }
 }
