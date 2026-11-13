@@ -55,7 +55,7 @@
     <string name="ui_card_sampling_scale">Card sampling scale</string>
     <string name="ui_card_tint_opacity">Card tint opacity</string>
     <string name="ui_full_screen_backdrop_blur">Full-screen backdrop blur</string>
-    <string name="ui_full_screen_sampling_scale">Full-screen extra zoom</string>
+    <string name="ui_full_screen_sampling_scale">Legacy full-screen scale</string>
     <string name="ui_full_screen_tint_opacity">Full-screen tint opacity</string>
     <string name="ui_luminance_blend">Luminance blend</string>
     <string name="ui_material_saturation">Material saturation</string>
@@ -140,10 +140,10 @@
     <string name="ui_distance_from_the_right_screen_edge">Distance from the right screen edge</string>
     <string name="ui_vertical_position_adjustment">Vertical position adjustment</string>
     <string name="ui_width_transition_duration">Width transition duration</string>
-    <string name="ui_key_nudge_distance">Key nudge distance</string>
+    <string name="ui_key_nudge_distance">Key press nudge distance</string>
     <string name="ui_key_spring_speed">Key spring speed</string>
     <string name="ui_nudge_damping">Nudge damping</string>
-    <string name="ui_initial_pop_scale">Initial pop scale</string>
+    <string name="ui_initial_pop_scale">Starting size</string>
     <string name="ui_pop_displacement">Pop displacement</string>
     <string name="ui_pop_duration">Pop duration</string>
     <string name="ui_pop_damping">Pop damping</string>
@@ -256,4 +256,172 @@
     <string name="ui_normal_notification_recipe_sample_scene_specific_system_recipes_a">Normal notification recipe sample; scene-specific system recipes are not reproduced</string>
     <string name="ui_on_2">On</string>
     <string name="ui_off">Off</string>
+    <string name="ui_card_materials">Card materials</string>
+    <string name="ui_pull_down_background">Panel background</string>
+    <string name="ui_tune_pull_down_background">Tune pull-down background</string>
+    <string name="ui_panel_background_blur">Background blur</string>
+    <string name="ui_panel_background_dim">Background dim</string>
+    <string name="ui_copy_tune_cards_in_the_enabled_scopes_the_pull_down_background_has_its_own_">Tune cards in the enabled scopes; the pull-down background has its own switch.</string>
+    <string name="ui_copy_standard_notifications">Standard notifications</string>
+    <string name="ui_copy_enable_lock_screen_notification_material_and_motion_separately_for_the">Enable Lock-screen notification material and motion separately for the lock screen.</string>
+    <string name="ui_copy_check_compatibility_turn_this_off_when_hmc_customizes_the_player_backg">Check compatibility: turn this off when HMC customizes the player background.</string>
+    <string name="ui_copy_control_center_cards_and_tiles">Control Center cards and tiles</string>
+    <string name="ui_copy_side_volume_bar_and_expanded_panel">Side volume bar and expanded panel</string>
+    <string name="ui_copy_applies_only_while_notification_center_or_control_center_is_expanded_c">Applies only while Notification Center or Control Center is expanded; card presets do not change it.</string>
+    <string name="ui_copy_use_notification_material_for_live_cards_and_music">Use notification material for live cards and music</string>
+    <string name="ui_copy_independent_of_card_tuning_respects_each_scope_and_leaves_top_banners_">Independent of card tuning; respects each scope and leaves top banners unchanged.</string>
+    <string name="ui_copy_glass_surface_blur">Glass surface blur</string>
+    <string name="ui_copy_100_keeps_the_system_value_lower_is_clearer_higher_is_more_frosted" formatted="false">100% keeps the system value; lower is clearer, higher is more frosted.</string>
+    <string name="ui_copy_blur_behind_cards">Blur behind cards</string>
+    <string name="ui_copy_100_keeps_the_system_value_changes_blur_behind_cards_not_the_whole_pul" formatted="false">100% keeps the system value; changes blur behind cards, not the whole pull-down background.</string>
+    <string name="ui_copy_card_background_scale">Card background scale</string>
+    <string name="ui_copy_100_keeps_the_system_ratio_0_removes_the_extra_scale_this_does_not_mea" formatted="false">100% keeps the system ratio; 0% removes the extra scale.</string>
+    <string name="ui_copy_card_tint_opacity">Card tint opacity</string>
+    <string name="ui_copy_100_keeps_the_system_value_0_removes_the_tint_higher_values_strengthen" formatted="false">100% keeps the system value; 0% removes the tint, higher values strengthen it.</string>
+    <string name="ui_copy_100_keeps_the_system_value_0_removes_blur_behind_the_panel_top_banners" formatted="false">100% keeps the system value; 0% removes blur behind the panel. Top banners are unchanged.</string>
+    <string name="ui_copy_retained_for_old_backups_not_used_by_current_tuning">Retained for old backups; not used by current tuning.</string>
+    <string name="ui_copy_100_keeps_the_system_value_0_removes_the_dim_layer_set_both_controls_t" formatted="false">100% keeps the system value; 0% removes the dim layer. Set both controls to 0% for full transparency.</string>
+    <string name="ui_copy_assistant_widget_material">Assistant widget material</string>
+    <string name="ui_copy_independent_switch_using_the_shared_glass_appearance_preserves_widget_">Independent switch using the shared glass appearance; preserves widget background blur and tint.</string>
+    <string name="ui_copy_smart_sidebar_material">Smart Sidebar material</string>
+    <string name="ui_copy_independent_switch_using_the_shared_glass_appearance_preserves_sidebar">Independent switch using the shared glass appearance; preserves sidebar background blur and tint.</string>
+    <string name="ui_copy_use_sidebar_glass_for_its_inner_cards">Use sidebar glass for its inner cards</string>
+    <string name="ui_copy_independent_switch_applying_system_sidebar_glass_to_tool_cards_and_the">Independent switch applying system sidebar glass to tool cards and the app list.</string>
+    <string name="ui_copy_backdrop_light_response">Backdrop light response</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_values_make_the_material_respond_more_" formatted="false">0% keeps the system value; higher values make the material respond more to backdrop light.</string>
+    <string name="ui_copy_glass_color_intensity">Glass color intensity</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_is_more_colorful_lower_is_closer_to_gr" formatted="false">0% keeps the system value; higher is more colorful, lower is closer to gray.</string>
+    <string name="ui_copy_surface_brightness_adjustment">Surface brightness adjustment</string>
+    <string name="ui_copy_0_keeps_the_system_value_follows_the_current_theme_adjustment_so_posit" formatted="false">0% keeps the system value; follows the current theme adjustment, so positive values are not always brighter.</string>
+    <string name="ui_copy_0_keeps_the_system_value_negative_values_are_more_transparent_positive" formatted="false">0% keeps the system value; negative values are more transparent, positive values more opaque.</string>
+    <string name="ui_copy_edge_refraction">Edge refraction</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_values_bend_the_background_more_around" formatted="false">0% keeps the system value; higher values bend the background more around the edges.</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_feels_thicker_adjust_alongside_edge_re" formatted="false">0% keeps the system value; higher feels thicker. Adjust alongside edge refraction.</string>
+    <string name="ui_copy_backdrop_color_intensity">Backdrop color intensity</string>
+    <string name="ui_copy_0_keeps_the_system_value_changes_only_the_backdrop_colors_seen_through" formatted="false">0% keeps the system value; changes only the backdrop colors seen through the glass.</string>
+    <string name="ui_copy_backdrop_brightness_adjustment">Backdrop brightness adjustment</string>
+    <string name="ui_copy_backdrop_color_depth">Backdrop color depth</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_values_deepen_the_backdrop_colors" formatted="false">0% keeps the system value; higher values deepen the backdrop colors.</string>
+    <string name="ui_copy_highlight_edge_width">Highlight edge width</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_makes_the_bright_edge_wider_lower_make" formatted="false">0% keeps the system value; higher makes the bright edge wider, lower makes it finer.</string>
+    <string name="ui_copy_highlight_edge_softness">Highlight edge softness</string>
+    <string name="ui_copy_0_keeps_the_system_value_positive_values_are_softer_negative_values_sh" formatted="false">0% keeps the system value; positive values are softer, negative values sharper.</string>
+    <string name="ui_copy_reflection_position">Reflection position</string>
+    <string name="ui_copy_0_keeps_the_system_position_adjusts_where_reflections_appear_along_the" formatted="false">0% keeps the system position; adjusts where reflections appear along the edges.</string>
+    <string name="ui_copy_0_keeps_the_system_value_higher_strengthens_highlights_lower_softens_t" formatted="false">0% keeps the system value; higher strengthens highlights, lower softens them.</string>
+    <string name="ui_copy_system_dimming">System dimming</string>
+    <string name="ui_copy_the_default_100_removes_system_dimming_0_restores_the_system_value" formatted="false">The default -100% removes system dimming; 0% restores the system value.</string>
+    <string name="ui_copy_lock_screen_notification_material_and_motion">Lock-screen notification material and motion</string>
+    <string name="ui_copy_check_compatibility_turn_this_off_when_hmc_customizes_the_lock_screen_">Check compatibility: turn this off when HMC customizes the lock screen. Unlocked Notification Center is unaffected.</string>
+    <string name="ui_copy_press_tilt_feedback">Press tilt feedback</string>
+    <string name="ui_copy_hold_a_card_to_tilt_and_slightly_shrink_it_around_the_touch_position_e">Hold a card to tilt and slightly shrink it around the touch position; enables the controls below.</string>
+    <string name="ui_copy_apply_to_standard_notifications">Apply to standard notifications</string>
+    <string name="ui_copy_apply_to_music_players">Apply to music players</string>
+    <string name="ui_copy_higher_values_make_corner_presses_tilt_the_card_more">Higher values make corner presses tilt the card more.</string>
+    <string name="ui_copy_pressed_size">Pressed size</string>
+    <string name="ui_copy_0_96x_means_4_smaller_1x_keeps_the_original_size" formatted="false">0.96x means 4% smaller; 1x keeps the original size.</string>
+    <string name="ui_copy_customize_top_banner_motion">Customize top banner motion</string>
+    <string name="ui_copy_keeps_the_native_position_changes_entry_exit_flip_and_surface_blur">Keeps the native position; changes entry, exit, flip and surface blur.</string>
+    <string name="ui_copy_relative_to_normal_size_0_6x_starts_at_60_size" formatted="false">Relative to normal size; 0.6x starts at 60% size.</string>
+    <string name="ui_copy_entry_duration">Entry duration</string>
+    <string name="ui_copy_entry_delay">Entry delay</string>
+    <string name="ui_copy_wait_before_the_entry_scale_animation_starts">Wait before the entry scale animation starts.</string>
+    <string name="ui_copy_entry_flip_angle">Entry flip angle</string>
+    <string name="ui_copy_the_sign_changes_flip_direction_0_degrees_disables_flipping">The sign changes flip direction; 0 degrees disables flipping.</string>
+    <string name="ui_copy_flip_duration">Flip duration</string>
+    <string name="ui_copy_initial_entry_blur">Initial entry blur</string>
+    <string name="ui_copy_0_disables_blur_the_animation_finishes_clear">0 disables blur; the animation finishes clear.</string>
+    <string name="ui_copy_blur_fade_delay">Blur fade delay</string>
+    <string name="ui_copy_blur_fade_duration">Blur fade duration</string>
+    <string name="ui_copy_entry_bounce">Entry bounce</string>
+    <string name="ui_copy_uses_a_spring_when_on_turn_off_to_adjust_the_smooth_curve">Uses a spring when on; turn off to adjust the smooth curve.</string>
+    <string name="ui_copy_entry_bounce_damping">Entry bounce damping</string>
+    <string name="ui_copy_lower_values_bounce_more_1_or_above_usually_has_little_bounce">Lower values bounce more; 1 or above usually has little bounce.</string>
+    <string name="ui_copy_entry_bounce_speed">Entry bounce speed</string>
+    <string name="ui_copy_higher_values_bounce_faster">Higher values bounce faster.</string>
+    <string name="ui_copy_flip_bounce_damping">Flip bounce damping</string>
+    <string name="ui_copy_lower_values_oscillate_more_higher_values_are_steadier">Lower values oscillate more; higher values are steadier.</string>
+    <string name="ui_copy_blur_transition_damping">Blur transition damping</string>
+    <string name="ui_copy_lower_values_oscillate_more_higher_values_are_steadier_2">Lower values oscillate more; higher values are steadier.</string>
+    <string name="ui_copy_exit_target_size">Exit target size</string>
+    <string name="ui_copy_relative_to_normal_size_lower_values_end_smaller">Relative to normal size; lower values end smaller.</string>
+    <string name="ui_copy_exit_duration">Exit duration</string>
+    <string name="ui_copy_exit_delay">Exit delay</string>
+    <string name="ui_copy_exit_bounce">Exit bounce</string>
+    <string name="ui_copy_exit_bounce_damping">Exit bounce damping</string>
+    <string name="ui_copy_exit_bounce_speed">Exit bounce speed</string>
+    <string name="ui_copy_notification_appearance_and_removal">Notification appearance and removal</string>
+    <string name="ui_copy_changes_list_item_appearance_and_removal_not_sideways_swipes_or_top_ba">Changes list item appearance and removal, not sideways swipes or top banners.</string>
+    <string name="ui_copy_list_bounce_damping">List bounce damping</string>
+    <string name="ui_copy_list_bounce_speed">List bounce speed</string>
+    <string name="ui_copy_higher_values_animate_faster">Higher values animate faster.</string>
+    <string name="ui_copy_appearance_starting_size">Appearance starting size</string>
+    <string name="ui_copy_relative_to_normal_size_1x_keeps_the_original_size">Relative to normal size; 1x keeps the original size.</string>
+    <string name="ui_copy_appearance_starting_opacity">Appearance starting opacity</string>
+    <string name="ui_copy_0_is_fully_transparent_1_is_fully_opaque">0 is fully transparent; 1 is fully opaque.</string>
+    <string name="ui_copy_appearance_starting_blur">Appearance starting blur</string>
+    <string name="ui_copy_0_disables_blur">0 disables blur.</string>
+    <string name="ui_copy_appearance_duration">Appearance duration</string>
+    <string name="ui_copy_removal_target_size">Removal target size</string>
+    <string name="ui_copy_removal_target_opacity">Removal target opacity</string>
+    <string name="ui_copy_removal_target_blur">Removal target blur</string>
+    <string name="ui_copy_removal_duration">Removal duration</string>
+    <string name="ui_copy_customize_notification_corners">Customize notification corners</string>
+    <string name="ui_copy_applies_to_new_or_recreated_notification_views_does_not_restart_system">Applies to new or recreated notification views; does not restart SystemUI.</string>
+    <string name="ui_copy_notification_corner_radius">Notification corner radius</string>
+    <string name="ui_copy_customize_control_center_corners">Customize Control Center corners</string>
+    <string name="ui_copy_top_large_tile_corners">Top large tile corners</string>
+    <string name="ui_copy_music_card_corners">Music card corners</string>
+    <string name="ui_copy_brightness_and_volume_slider_corners">Brightness and volume slider corners</string>
+    <string name="ui_copy_quick_toggle_corners">Quick toggle corners</string>
+    <string name="ui_copy_lower_is_squarer_higher_is_rounder">Lower is squarer; higher is rounder.</string>
+    <string name="ui_copy_device_center_corners">Device Center corners</string>
+    <string name="ui_copy_secondary_panel_corners">Secondary panel corners</string>
+    <string name="ui_copy_customize_volume_bar_corners">Customize volume bar corners</string>
+    <string name="ui_copy_reopen_the_panel_to_apply_some_system_versions_need_a_systemui_reload">Reopen the panel to apply; some system versions need a SystemUI reload.</string>
+    <string name="ui_copy_volume_bar_corner_radius">Volume bar corner radius</string>
+    <string name="ui_copy_customize_timer_corners">Customize timer corners</string>
+    <string name="ui_copy_changes_mute_and_do_not_disturb_timers_only_reopen_the_panel_to_apply">Changes mute and Do Not Disturb timers only; reopen the panel to apply.</string>
+    <string name="ui_copy_timer_corner_radius">Timer corner radius</string>
+    <string name="ui_copy_always_hide_mute_and_do_not_disturb_buttons">Always hide mute and Do Not Disturb buttons</string>
+    <string name="ui_copy_hidden_in_narrow_mode_by_default_enabling_also_hides_them_in_the_wide_">Hidden in narrow mode by default; enabling also hides them in the wide bar, but not the full panel.</string>
+    <string name="ui_copy_hold_volume_bar_for_full_panel">Hold volume bar for full panel</string>
+    <string name="ui_copy_dragging_up_or_down_to_change_volume_does_not_trigger_expansion">Dragging up or down to change volume does not trigger expansion.</string>
+    <string name="ui_copy_narrow_volume_bar_and_motion">Narrow volume bar and motion</string>
+    <string name="ui_copy_starts_wide_narrows_on_another_key_press_widens_on_touch_and_narrows_o">Starts wide, narrows on another key press, widens on touch and narrows on release.</string>
+    <string name="ui_copy_narrowed_width">Narrowed width</string>
+    <string name="ui_copy_in_dp_applies_when_the_system_recreates_the_volume_bar">In dp; applies when the system recreates the volume bar.</string>
+    <string name="ui_copy_right_edge_gap">Right edge gap</string>
+    <string name="ui_copy_in_pixels_0_touches_the_edge_reopen_the_panel_to_apply">In pixels; 0 touches the edge. Reopen the panel to apply.</string>
+    <string name="ui_copy_in_pixels_negative_moves_up_positive_down_reopen_the_panel_to_apply">In pixels; negative moves up, positive down. Reopen the panel to apply.</string>
+    <string name="ui_copy_width_transition_duration">Width transition duration</string>
+    <string name="ui_copy_in_dp_0_disables_the_nudge">In dp; 0 disables the nudge.</string>
+    <string name="ui_copy_key_press_nudge_speed">Key press nudge speed</string>
+    <string name="ui_copy_higher_values_nudge_faster">Higher values nudge faster.</string>
+    <string name="ui_copy_nudge_bounce_damping">Nudge bounce damping</string>
+    <string name="ui_copy_0_2x_starts_at_20_of_normal_size" formatted="false">0.2x starts at 20% of normal size.</string>
+    <string name="ui_copy_pop_slide_in_distance">Pop slide-in distance</string>
+    <string name="ui_copy_pop_ending_softness">Pop ending softness</string>
+    <string name="ui_copy_higher_values_start_faster_and_slow_more_near_the_end">Higher values start faster and slow more near the end.</string>
+    <string name="ui_copy_entry_control_point_1_x">Entry control point 1 X</string>
+    <string name="ui_copy_x_controls_time_and_y_controls_progress_available_only_with_the_corres">X controls time and Y controls progress; available only with the corresponding bounce off.</string>
+    <string name="ui_copy_entry_control_point_1_y">Entry control point 1 Y</string>
+    <string name="ui_copy_entry_control_point_2_x">Entry control point 2 X</string>
+    <string name="ui_copy_entry_control_point_2_y">Entry control point 2 Y</string>
+    <string name="ui_copy_exit_control_point_1_x">Exit control point 1 X</string>
+    <string name="ui_copy_exit_control_point_1_y">Exit control point 1 Y</string>
+    <string name="ui_copy_exit_control_point_2_x">Exit control point 2 X</string>
+    <string name="ui_copy_exit_control_point_2_y">Exit control point 2 Y</string>
+    <string name="ui_copy_clear_glass_with_a_light_tint_and_fine_bright_edges">Clear glass with a light tint and fine bright edges.</string>
+    <string name="ui_copy_a_light_haze_that_softens_the_backdrop">A light haze that softens the backdrop.</string>
+    <string name="ui_copy_vivid_colors_with_stronger_refraction_and_bright_edges">Vivid colors with stronger refraction and bright edges.</string>
+    <string name="ui_copy_softer_dimensional_glass_lighter_than_floating_shadow">Softer dimensional glass, lighter than Floating Shadow.</string>
+    <string name="ui_copy_dense_frosting_with_dimensional_glass_edges">Dense frosting with dimensional glass edges.</string>
+    <string name="ui_copy_a_soft_matte_haze_with_restrained_reflections">A soft matte haze with restrained reflections.</string>
+    <string name="ui_copy_enable_card_materials_lock_screen_effects_and_sidebar_tuning_separatel">Enable card materials, lock-screen effects and sidebar tuning separately.</string>
+    <string name="ui_copy_apply_a_preset_or_adjust_glass_opacity_blur_and_tint">Apply a preset or adjust glass opacity, blur and tint.</string>
+    <string name="ui_copy_tune_the_backdrop_behind_pulled_down_panels_without_changing_card_mate">Tune the backdrop behind pulled-down panels without changing card material settings.</string>
+    <string name="ui_copy_adjust_corners_for_notifications_control_center_and_the_volume_bar">Adjust corners for notifications, Control Center and the volume bar.</string>
+    <string name="ui_copy_tune_press_feedback_top_banners_and_list_appearance_and_removal">Tune press feedback, top banners and list appearance and removal.</string>
+    <string name="ui_copy_set_side_volume_bar_width_position_and_motion">Set side volume bar width, position and motion.</string>
 </resources>

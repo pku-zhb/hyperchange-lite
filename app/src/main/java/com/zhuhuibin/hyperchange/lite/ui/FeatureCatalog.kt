@@ -7,11 +7,12 @@ import com.zhuhuibin.hyperchange.lite.DeferredSettings
 
 /** Navigation owns presentation only; persisted setting names remain unchanged. */
 enum class Feature(val title: String, val summary: String) {
-    SCOPES("启用与范围", "选择材质和通知效果的生效位置"),
-    MATERIAL("材质", "分别调节卡片材质与整屏背景"),
-    CORNERS("圆角", "通知、控制中心与音量条的圆角"),
-    NOTIFICATIONS("通知动画", "按压反馈、顶部横幅与通知列表动画"),
-    VOLUME("音量面板", "长按展开、音量条尺寸与弹出动画");
+    SCOPES("启用与范围", "分别开启卡片材质、锁屏效果与侧栏调节"),
+    MATERIAL("卡片材质", "套用预设，或微调玻璃通透、模糊与底色"),
+    BACKDROP("下拉背景", "单独调节下拉面板后方背景，不改卡片材质参数"),
+    CORNERS("圆角", "调整通知、控制中心与音量条的圆角"),
+    NOTIFICATIONS("通知动画", "调节按压反馈、顶部横幅与列表出现消失"),
+    VOLUME("音量面板", "设置侧边音量条宽窄、位置与动画");
 
     val settings: List<LiteSetting> get() = LiteCatalog.entries.filter { owner(it) == this }
     val visibleSettings: List<LiteSetting> get() = settings.filter(::settingVisible)

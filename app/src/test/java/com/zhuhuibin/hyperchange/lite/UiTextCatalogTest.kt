@@ -22,6 +22,8 @@ class UiTextCatalogTest {
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(File(main, "res/$folder/ui_text.xml"))
         val strings = document.getElementsByTagName("string")
+        val names = (0 until strings.length).map { strings.item(it).attributes.getNamedItem("name").nodeValue }
+        assertEquals("Duplicate resource name in $folder", names.size, names.toSet().size)
         return (0 until strings.length).associate { index ->
             val node = strings.item(index)
             node.attributes.getNamedItem("name").nodeValue to node.textContent
@@ -35,12 +37,19 @@ class UiTextCatalogTest {
             assertCovered(it.title)
             assertCovered(settingDisplayTitle(it))
             assertCovered(it.group)
+            if (it.summary.isNotBlank()) assertCovered(it.summary)
         }
-        Feature.entries.forEach { assertCovered(it.title) }
+        Feature.entries.forEach {
+            assertCovered(it.title)
+            assertTrue("Missing feature explanation: ${it.name}", it.summary.isNotBlank())
+            assertCovered(it.summary)
+        }
         MaterialCategory.entries.forEach { assertCovered(it.title) }
         builtInGlassPresets.forEachIndexed { index, preset ->
             assertCovered(preset.title)
             assertCovered("${'A' + index} · ${preset.title}")
+            assertTrue("Missing preset explanation: ${preset.id}", preset.description.isNotBlank())
+            assertCovered(preset.description)
         }
     }
 
@@ -59,6 +68,9 @@ class UiTextCatalogTest {
         val chinese = resources("values-zh")
         assertEquals(fallback, english)
         assertEquals(fallback.keys, chinese.keys)
+        val referenced = Regex("R\\.string\\.([a-z0-9_]+)").findAll(File(source, "ui/UiText.kt").readText())
+            .map { it.groupValues[1] }.toSet()
+        assertEquals("Resource catalog and XML keys must match", referenced, fallback.keys)
         assertEquals(UiTextCatalog.resourceIds.size, fallback.size)
         assertEquals(UiTextCatalog.resourceIds.size, UiTextCatalog.resourceIds.values.toSet().size)
         fallback.forEach { (id, text) ->

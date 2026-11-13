@@ -5,45 +5,63 @@ import com.zhuhuibin.hyperchange.lite.glass.softGlassParameters
 
 object GlassSettingsSpec {
     val entries: List<LiteSetting> = buildList {
-        add(LiteSetting.toggle("glass_enabled", "卡片材质调节", "柔光玻璃", summary = "调节已开启范围的卡片玻璃；关闭后保留数值，不改变整屏背景的独立开关"))
-        add(LiteSetting.toggle("glass_notifications", "普通通知材质", "柔光范围", true,
-            summary = "调节通知卡片；锁屏通知需另外开启“锁屏通知效果”"))
-        add(LiteSetting.toggle(SettingsMigration.MEDIA_KEY, "音乐卡片材质", "柔光范围",
-            summary = "调节通知栏和锁屏的播放器背景。使用 HMC 自定义播放器背景时关闭，避免两边同时修改"))
-        add(LiteSetting.toggle("glass_control_center", "控制中心", "柔光范围", true))
-        add(LiteSetting.toggle("glass_volume", "音量面板", "柔光范围", true))
+        add(LiteSetting.toggle("glass_enabled", "卡片材质调节", "柔光玻璃", summary = "调节已开启范围内的卡片；下拉背景有独立开关"))
+        add(LiteSetting.toggle("glass_notifications", "通知栏普通通知", "柔光范围", true, summary = "锁屏通知需另外开启“锁屏通知材质与动画”"))
+        add(LiteSetting.toggle(SettingsMigration.MEDIA_KEY, "音乐卡片材质", "柔光范围", summary = "注意兼容：使用 HMC 自定义播放器背景时关闭"))
+        add(LiteSetting.toggle("glass_control_center", "控制中心卡片与磁贴", "柔光范围", true))
+        add(LiteSetting.toggle("glass_volume", "侧边音量条与展开面板", "柔光范围", true))
         add(LiteSetting.toggle("glass_shade", "下拉背景", "柔光范围", true))
-        add(LiteSetting.toggle("glass_shade_enabled", "整屏背景调节", "整屏背景", summary = "独立调节已展开通知中心与控制中心的底层背景；不随卡片预设或卡片开关改变"))
-        add(LiteSetting.toggle("glass_unify_notifications", "统一通知与音乐材质", "柔光范围", summary = "让实时卡片和音乐卡采用普通通知的玻璃样式。独立于材质调节总开关，仍遵守各自的作用范围；不改变悬浮通知"))
-        add(LiteSetting.number("glass_refraction_blur", "玻璃模糊", "柔光玻璃", 100f, 0f, 200f, summary = "100% 保留系统值；向左更清晰，向右更模糊"))
-        add(LiteSetting.number("glass_background_blur", "卡片后方模糊", "卡片取样", 100f, 0f, 200f, summary = "只调卡片背后取样；100% 保留系统值，不改变整屏下拉背景"))
-        add(LiteSetting.number("glass_background_scale", "卡片取样尺度", "卡片取样", 100f, 0f, 200f, summary = "只改变卡片背后取样尺度；100% 保留系统值"))
-        add(LiteSetting.number("glass_background_opacity", "卡片底色浓度", "卡片取样", 100f, 0f, 200f, summary = "只调卡片底色；100% 保留系统值，不改变整屏遮罩"))
-        add(LiteSetting.number("glass_shade_blur", "背景模糊", "整屏背景", 100f, 0f, 200f, summary = "0% 去掉下拉面板后方模糊；100% 保留系统值"))
-        add(LiteSetting.number("glass_shade_scale", "整屏额外缩放", "整屏背景", 100f, 0f, 200f, summary = "0% 不额外缩放；100% 保留系统值"))
-        add(LiteSetting.number("glass_shade_opacity", "背景遮罩", "整屏背景", 100f, 0f, 200f, summary = "0% 去掉下拉面板后方遮罩；100% 保留系统值"))
+        add(LiteSetting.toggle("glass_shade_enabled", "调节下拉背景", "整屏背景", summary = "仅在通知中心或控制中心展开时生效；不受卡片预设影响"))
+        add(LiteSetting.toggle("glass_unify_notifications", "实时卡片与音乐沿用通知材质", "柔光范围", summary = "独立于卡片调节开关；仍遵守各自范围，不改变顶部横幅"))
+        add(LiteSetting.number("glass_refraction_blur", "玻璃表层模糊", "柔光玻璃", 100f, 0f, 200f, summary = "100% 为系统原样；调低更清晰，调高更磨砂"))
+        add(LiteSetting.number("glass_background_blur", "卡片背后模糊", "卡片取样", 100f, 0f, 200f, summary = "100% 为系统原样；只改卡片背后的模糊，不改整片下拉背景"))
+        add(LiteSetting.number("glass_background_scale", "卡片背景缩放", "卡片取样", 100f, 0f, 200f, summary = "100% 保留系统比例；0% 关闭额外缩放"))
+        add(LiteSetting.number("glass_background_opacity", "卡片底色不透明度", "卡片取样", 100f, 0f, 200f, summary = "100% 为系统原样；0% 去掉底色，调高底色更浓"))
+        add(LiteSetting.number("glass_shade_blur", "背景模糊", "整屏背景", 100f, 0f, 200f, summary = "100% 为系统原样；0% 去掉面板后方模糊，顶部横幅不变"))
+        add(LiteSetting.number("glass_shade_scale", "整屏额外缩放", "整屏背景", 100f, 0f, 200f, summary = "旧版备份保留项，当前不参与调节"))
+        add(LiteSetting.number("glass_shade_opacity", "背景遮罩", "整屏背景", 100f, 0f, 200f, summary = "100% 为系统原样；0% 去掉面板后方遮罩，与背景模糊均为 0% 时完全透明"))
         softGlassParameters.forEach { p ->
             add(LiteSetting.number("glass_${p.key}", materialTitle(p.key, p.title), "材质细调", if (p.key == "darker") -100f else 0f,
-                p.adjustmentRange.first.toFloat(), p.adjustmentRange.last.toFloat(), summary = when (p.key) {
-                    "darker" -> "默认 −100% 去掉系统压暗；0% 恢复原值"
-                    "brightness", "background_brightness" -> "相对系统亮度配方增减，0% 保留原值；正值不一定更亮"
-                    "edge_feather" -> "正值让边缘更柔和，负值更锐利；0% 保留系统值"
-                    else -> "相对系统配方增减；0% 保留原值，建议先小幅调整"
-                }))
+                p.adjustmentRange.first.toFloat(), p.adjustmentRange.last.toFloat(), summary = materialSummary(p.key)))
         }
-        add(LiteSetting.toggle("glass_assistant", "负一屏组件柔光", "负一屏与侧边栏", summary = "独立开关，共用折射和光影参数；背景模糊、采样比例与背景色保留组件原值"))
-        add(LiteSetting.toggle("glass_sidebar", "侧边栏柔光", "负一屏与侧边栏", summary = "独立开关，共用折射和光影参数；背景模糊、采样比例与背景色保留组件原值"))
-        add(LiteSetting.toggle("glass_sidebar_unify", "侧边栏卡片统一材质", "负一屏与侧边栏", summary = "将侧栏工具卡片和应用面板改用系统侧栏玻璃；独立于侧边栏柔光开关"))
+        add(LiteSetting.toggle("glass_assistant", "负一屏小组件材质", "负一屏与侧边栏", summary = "独立开关，共用玻璃外观参数；保留组件自身的背景模糊与底色"))
+        add(LiteSetting.toggle("glass_sidebar", "智能侧边栏材质", "负一屏与侧边栏", summary = "独立开关，共用玻璃外观参数；保留侧栏自身的背景模糊与底色"))
+        add(LiteSetting.toggle("glass_sidebar_unify", "侧栏小卡片沿用侧栏玻璃", "负一屏与侧边栏", summary = "独立开关，让工具卡与应用列表使用系统侧栏玻璃"))
     }
 
     private fun materialTitle(key: String, fallback: String) = when (key) {
-        "luminance" -> "明暗混合"
-        "brightness" -> "表面亮度混合"
+        "luminance" -> "底图明暗变化"
+        "saturation" -> "玻璃色彩浓淡"
+        "brightness" -> "表面亮度调节"
         "alpha" -> "玻璃不透明度"
-        "refraction" -> "折射强度"
+        "refraction" -> "边缘折射强度"
         "thickness" -> "玻璃厚度"
-        "background_brightness" -> "背景亮度混合"
-        "burn" -> "背景压色"
+        "background_saturation" -> "背景色彩浓淡"
+        "background_brightness" -> "背景亮度调节"
+        "burn" -> "背景颜色加深"
+        "edge" -> "亮边宽度"
+        "edge_feather" -> "亮边柔和度"
+        "reflection_offset" -> "反光位置"
+        "light" -> "高光强度"
+        "darker" -> "系统压暗"
         else -> fallback
+    }
+
+    private fun materialSummary(key: String) = when (key) {
+        "luminance" -> "0% 保留系统值；调高让材质更多地随底图明暗变化"
+        "saturation" -> "0% 保留系统值；调高更鲜艳，调低更接近灰色"
+        "brightness" -> "0% 保留系统值；沿当前主题的明暗方向增减，正值不一定更亮"
+        "alpha" -> "0% 保留系统值；负值更通透，正值更厚实"
+        "refraction" -> "0% 保留系统值；调高让边缘透出的背景弯曲更明显"
+        "thickness" -> "0% 保留系统值；调高更厚重，可配合边缘折射调整"
+        "background_saturation" -> "0% 保留系统值；只改玻璃透出的背景颜色"
+        "background_brightness" -> "0% 保留系统值；沿当前主题的明暗方向增减，正值不一定更亮"
+        "burn" -> "0% 保留系统值；调高让透出的背景颜色更深"
+        "edge" -> "0% 保留系统值；调高亮边更宽，调低更细"
+        "edge_feather" -> "0% 保留系统值；正值更柔和，负值更锐利"
+        "reflection_offset" -> "0% 保留系统位置；微调边缘反光的位置"
+        "light" -> "0% 保留系统值；调高反光更强，调低更柔和"
+        "darker" -> "默认 −100% 去掉系统压暗；0% 恢复系统原样"
+        else -> ""
     }
 }
