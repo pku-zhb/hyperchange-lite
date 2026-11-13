@@ -137,7 +137,7 @@ private fun FeaturePage(
     val fallback = specs.firstOrNull() ?: LiteCatalog.entries.first { it.key == "glass_refraction_blur" }
     var focusedKey by rememberSaveable(feature.name) { mutableStateOf(fallback.key) }
     val focused = LiteCatalog.entries.firstOrNull { it.key == focusedKey } ?: fallback
-    val target = previewTargetForSetting(focused)
+    val target = previewTargetForSetting(focused, values)
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(list, project) {

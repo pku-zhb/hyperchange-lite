@@ -25,6 +25,21 @@ class AutomaticPreviewTest {
         assertEquals("NOTIFICATION", previewTargetForSetting(spec("notification_stack_anim_remove_alpha")).scene.name)
     }
 
+    @Test fun sharedControlsChooseAnEnabledCoreRange() {
+        assertEquals("CONTROL", previewTargetForSetting(spec("glass_refraction"), mapOf(
+            "glass_enabled" to true, "glass_notifications" to false,
+        )).scene.name)
+        assertEquals("WIDGET", previewTargetForSetting(spec("glass_refraction"), mapOf(
+            "glass_enabled" to false, "glass_assistant" to true,
+        )).scene.name)
+        assertEquals("MEDIA", previewTargetForSetting(spec("notification_press_tilt_max_deg"), mapOf(
+            "notification_press_tilt_row_enabled" to false, "notification_press_tilt_media_enabled" to true,
+        )).scene.name)
+        assertEquals("NOTIFICATION", previewTargetForSetting(spec("glass_background_blur"), mapOf(
+            "glass_enabled" to true, "glass_shade" to false,
+        )).scene.name)
+    }
+
     @Test fun hmcCompatibilityUsesOnlyAShortTitleMarker() {
         assertEquals(spec(SettingsMigration.MEDIA_KEY).title + "（注意兼容）", settingDisplayTitle(spec(SettingsMigration.MEDIA_KEY)))
         assertEquals(spec(SettingsMigration.LOCKSCREEN_KEY).title + "（注意兼容）", settingDisplayTitle(spec(SettingsMigration.LOCKSCREEN_KEY)))

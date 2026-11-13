@@ -11,7 +11,10 @@ rendered sample above one scrollable controls list. No preview caption, status
 paragraph, preview selector, separate preview page or always-visible playback /
 background controls compete with the settings. The current project, first
 visible setting and explicit edits choose a representative sample automatically.
-An explicit edit keeps priority until the user actually scrolls again.
+An explicit edit keeps priority until the user actually scrolls again. Shared
+controls choose an enabled core range, including independent Assistant/sidebar
+material or media-only press feedback, instead of showing an unrelated disabled
+surface.
 
 Persistent descriptions and help paragraphs are removed. HMC-sensitive controls
 carry only the short title marker “注意兼容”. Essential numeric validation,
