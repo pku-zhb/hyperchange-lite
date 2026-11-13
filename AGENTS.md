@@ -1,7 +1,11 @@
-# HyperChange Lite
+# hc-lite
 
-This repository is the owner of HyperChange Lite, an intentionally reduced fork of
+This repository is the owner of hc-lite, an intentionally reduced fork of
 ColdP/HyperChanger. Its package is `com.zhuhuibin.hyperchange.lite`.
+The fork is `pku-zhb/hc-lite`; its owning checkout is
+`/Volumes/Harbor/lab/android/hc-lite`, with default build output in
+`/Volumes/Harbor/DevCache/hc-lite`. Keep the existing `hyperchange_lite`
+preference group and `hyperchange-lite` JSON format for upgrade compatibility.
 
 - Keep only SystemUI/Control Center materials, notification behavior, volume controls,
   Personal Assistant widgets and SecurityCenter sidebar material. Desktop work is deferred.
@@ -31,11 +35,15 @@ ColdP/HyperChanger. Its package is `com.zhuhuibin.hyperchange.lite`.
   critical startup ordering when pruning features instead of rewriting it casually.
   Keep raw ANR evidence out of commits. Do not leave LSPosed safe mode or reload scopes
   while startup acceptance remains pending without the owner's explicit instruction.
-- Before delivering each APK version, run `tools/archive-preview.py`. Retain the signed
+- Before delivering each APK version, run `tools/archive-apk.py`. Retain the signed
   versioned APK under `releases/local/` and copy it to the owner's existing
   `~/Harbor Drive/02 Personal Files/Miduo/` archive. Verify equal SHA-256 hashes and
   never overwrite a different build under an existing version. Increase versionName
   and versionCode for each delivered app change; preserve the signing identity.
+- Use ordinary release versions and the filename `hc-lite-<version>.apk`. Keep
+  source hashes in embedded metadata and receipts, with `release_name` equal to
+  the full source commit. Preserve historical artifact names and receipts.
+  Use `(major * 10000 + minor * 100 + patch) * 1000` for stable versionCode values.
 - Keep machine receipts and checksums in the project. The personal archive contains
   installable APKs and short Chinese acceptance notes, not raw logs or phone dumps.
 - End every development round with a concise Chinese report. For bug fixes, explain
@@ -55,3 +63,5 @@ ColdP/HyperChanger. Its package is `com.zhuhuibin.hyperchange.lite`.
   and stop installation retries for that delivery. This handoff is currently active
   for `0.1.0-preview1`; its ADB installation was rejected by the phone's installer.
   Verify the downloaded file hash without opening the file manager or installer UI.
+
+New APK filenames use the short project name and ordinary X.Y.Z version, without preview labels or source IDs. Keep source identity inside the APK and local receipts. Preserve historical APKs and names.

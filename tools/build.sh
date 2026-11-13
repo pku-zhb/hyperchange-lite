@@ -7,7 +7,7 @@ if ! mount | /usr/bin/grep -Fq " on $volume (" || [[ ! -w "$volume/DevCache" ]];
     echo 'Harbor must be mounted with a writable DevCache directory.' >&2
     exit 1
 fi
-cache="${LITE_DEV_CACHE:-$volume/DevCache/hyperchange-lite}"
+cache="${LITE_DEV_CACHE:-$volume/DevCache/hc-lite}"
 # Worktrees can isolate every mutable build output while sharing downloaded tools.
 case "$cache" in
     "$volume/DevCache/"*) ;;

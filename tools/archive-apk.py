@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 
 PROJECT = Path(__file__).resolve().parent.parent
-DEFAULT_APK = Path("/Volumes/Harbor/DevCache/hyperchange-lite/build/app/outputs/apk/debug/app-debug.apk")
+DEFAULT_APK = Path("/Volumes/Harbor/DevCache/hc-lite/build/app/outputs/apk/debug/app-debug.apk")
 DEFAULT_ARCHIVE = Path.home() / "Harbor Drive/02 Personal Files/Miduo"
 
 
@@ -84,11 +84,14 @@ def main():
     package_line = next(line for line in badging.splitlines() if line.startswith("package: "))
     package = dict(re.findall(r"(\w+)='([^']*)'", package_line))
     if package.get("name") != "com.zhuhuibin.hyperchange.lite":
-        raise ValueError("This APK is not HyperChange Lite.")
+        raise ValueError("This APK is not hc-lite.")
     version = package["versionName"]
     code = int(package["versionCode"])
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,70}", version) or code < 1:
-        raise ValueError("Invalid archive version.")
+    if not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", version) or code < 1:
+        raise ValueError("Use an ordinary X.Y.Z archive version without preview or source suffixes.")
+    major, minor, patch = map(int, version.split('.'))
+    if code != (major * 10000 + minor * 100 + patch) * 1000:
+        raise ValueError("versionCode does not match the ordinary version formula.")
     manifest = subprocess.check_output(
         [str(build_tools / "aapt2"), "dump", "xmltree", str(source), "--file", "AndroidManifest.xml"], text=True)
     metadata = re.search(
@@ -98,7 +101,7 @@ def main():
         raise ValueError("APK embedded source revision differs from the committed delivery source.")
 
     checksum = digest(source)
-    filename = f"hyperchange-lite-{version}-{commit[:12]}.apk"
+    filename = f"hc-lite-{version}.apk"
     local = PROJECT / "releases/local"
     local.mkdir(parents=True, exist_ok=True)
     retained, delivered = local / filename, archive / filename
@@ -111,7 +114,8 @@ def main():
         if any(record.get(key) != value for key, value in identity.items()):
             raise ValueError("An existing version receipt belongs to a different APK.")
         already_archived = True
-    for previous in local.glob("hyperchange-lite-*.json"):
+    # Historical receipts keep their original names and signing/version continuity.
+    for previous in (*local.glob("hyperchange-lite-*.json"), *local.glob("hc-lite-*.json")):
         record = json.loads(previous.read_text())
         if record["package"] != package["name"]:
             raise ValueError("The local archive contains a receipt for another package.")

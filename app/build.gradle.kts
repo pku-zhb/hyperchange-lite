@@ -3,10 +3,15 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
-val liteSourceRevision = providers.exec {
+val liteSourceHead = providers.exec {
     workingDir(rootDir)
     commandLine("git", "rev-parse", "HEAD")
 }.standardOutput.asText.get().trim()
+val liteSourceDirty = providers.exec {
+    workingDir(rootDir)
+    commandLine("git", "status", "--porcelain")
+}.standardOutput.asText.get().isNotBlank()
+val liteSourceRevision = liteSourceHead + if (liteSourceDirty) "-dirty" else ""
 android {
     namespace = "com.zhuhuibin.hyperchange.lite"
     compileSdk = 37
@@ -14,8 +19,8 @@ android {
         applicationId = "com.zhuhuibin.hyperchange.lite"
         minSdk = 35
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.1.0-preview7"
+        versionCode = 101000
+        versionName = "0.1.1"
         manifestPlaceholders["liteSourceRevision"] = liteSourceRevision
     }
     buildTypes {

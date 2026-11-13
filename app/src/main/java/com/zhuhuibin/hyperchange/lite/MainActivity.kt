@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread {
                             if (!isDestroyed) result.onSuccess {
                                 pendingExport = it
-                                exporter.launch("hyperchange-lite-preset.json")
+                                exporter.launch("hc-lite-preset.json")
                             }.onFailure { report("导出失败：${it.message}") }
                         }
                     }

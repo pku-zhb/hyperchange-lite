@@ -132,7 +132,8 @@ Reproduce in the maintainer environment:
 tools/build.sh :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
 ```
 
-Build artifacts and reports are under `/Volumes/Harbor/DevCache/hyperchange-lite/build`.
+Current reproduction puts build artifacts and reports under
+`/Volumes/Harbor/DevCache/hc-lite/build`.
 Platform status/navigation-bar styling APIs produce deprecation warnings; they did
 not fail compilation or the release lint-vital check.
 

@@ -67,7 +67,7 @@ fun LiteApp(
     MiuixTheme(controller = theme) {
         Scaffold(topBar = {
             SmallTopAppBar(
-                title = feature?.title ?: if (page == "config" || page == "presets") "配置" else "HyperChange Lite",
+                title = feature?.title ?: if (page == "config" || page == "presets") "配置" else "hc-lite",
                 navigationIcon = {
                     if (page != "home") IconButton(onClick = back) {
                         Icon(MiuixIcons.Basic.ArrowRight, "返回", Modifier.size(20.dp).graphicsLayer { rotationZ = 180f })

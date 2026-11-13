@@ -1,7 +1,12 @@
-# HyperChange Lite
+# hc-lite
 
 A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintained
-by [pku-zhb](https://github.com/pku-zhb). Package: `com.zhuhuibin.hyperchange.lite`.
+at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
+`com.zhuhuibin.hyperchange.lite`.
+
+Version 0.1.1 adopts the shorter hc-lite name. The package, signing identity,
+preference group and configuration format are preserved for existing upgrades
+and imports. Earlier preview versions and their archived filenames remain historical records.
 
 The retained scope is native soft-glass tuning, notification materials and
 interactions, Control Center corners, volume controls, Personal Assistant widgets
@@ -59,15 +64,18 @@ The script verifies the Harbor mount and places every build output and cache
 outside the source tree. For another environment, set `JAVA_HOME`, `ANDROID_HOME`
 and `LITE_BUILD_ROOT`, then use `./gradlew -I tools/gradle-init.gradle`.
 Concurrent worktrees must set `LITE_DEV_CACHE` to their own directory under
-`/Volumes/Harbor/DevCache/`; this isolates build, project, Kotlin and temporary
+`/Volumes/Harbor/DevCache/`; the default is `/Volumes/Harbor/DevCache/hc-lite`.
+This isolates build, project, Kotlin and temporary
 outputs while retaining the shared downloaded Gradle dependencies.
 
-Before delivering a preview in the maintainer environment, run
-`python3 tools/archive-preview.py`. It checks the APK identity and signature,
+Before delivering an APK in the maintainer environment, run
+`python3 tools/archive-apk.py`. It checks the APK identity and signature,
 requires a clean source revision already pushed to main, checks the embedded
-source identity, retains a versioned/hash-named copy under `releases/local/`, and imports an identical copy
+source identity, retains `hc-lite-<version>.apk` under `releases/local/`, and imports an identical copy
 into the owner's existing `02 Personal Files/Miduo` archive. Different builds
-cannot replace an archived version. Receipts remain local to the project.
+cannot replace an archived version. Receipts retain the full commit as
+`release_name`; both historical and current receipt names enforce signing and
+version continuity. Receipts remain local to the project.
 
 ## Preview status
 
