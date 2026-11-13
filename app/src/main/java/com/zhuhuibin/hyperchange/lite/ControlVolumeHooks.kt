@@ -35,6 +35,9 @@ class ControlVolumeHooks {
     private val sliderRefresh = ThreadLocal<Boolean>()
     private val sliderResourceOwner = ThreadLocal<Any>()
     private var pendingRefresh: Runnable? = null
+    private val numericDefaults = ControlVolumeSettingsSpec.entries.mapNotNull { spec ->
+        (spec.defaultValue as? Number)?.let { spec.key to it.toFloat() }
+    }.toMap()
 
     fun install(runtime: HookRuntime) {
         val p = runtime.preferences
@@ -164,7 +167,10 @@ class ControlVolumeHooks {
         }
     }
 
-    private fun number(key: String, fallback: Float) = preferences?.getFloat(key, fallback) ?: fallback
+    private fun number(key: String, fallback: Float): Float {
+        val default = numericDefaults[key] ?: fallback
+        return preferences?.getFloat(key, default) ?: default
+    }
 
     private fun installDimensions(runtime: HookRuntime) {
         for (name in listOf("getDimension", "getDimensionPixelSize", "getDimensionPixelOffset")) {
