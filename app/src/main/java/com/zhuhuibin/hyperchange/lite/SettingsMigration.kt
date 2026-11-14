@@ -25,7 +25,8 @@ internal object SettingsMigration {
     )
     // Later opt-ins must neither make an old full export incomplete nor turn a
     // new partial edit into evidence of the legacy combined scopes.
-    private val laterScopeKeys = setOf(MEDIA_KEY, LOCKSCREEN_KEY, LOCKSCREEN_ANIMATIONS_KEY, EDGE_GAP_KEY, "glass_heads_up")
+    private val laterScopeKeys = setOf(MEDIA_KEY, LOCKSCREEN_KEY, LOCKSCREEN_ANIMATIONS_KEY, EDGE_GAP_KEY,
+        "glass_heads_up", "notification_banner_readability")
 
     private val legacyKeys by lazy {
         (LiteCatalog.entries.map { it.key }.toSet() + LEGACY_VOLUME_OFFSET_KEY) -

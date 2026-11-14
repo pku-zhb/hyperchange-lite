@@ -10,6 +10,7 @@ class NotificationEffects {
     private val tilt = NotificationTilt()
     private val headsUp = NotificationHeadsUp()
     private val rows = NotificationRowAnimations()
+    private val readability = BannerReadability()
 
     fun install(runtime: HookRuntime) {
         if (installed || runtime.packageName != "com.android.systemui") return
@@ -18,6 +19,7 @@ class NotificationEffects {
         for ((name, install) in listOf<Pair<String, () -> Unit>>(
             "press" to { tilt.install(runtime) }, "heads-up" to { headsUp.install(runtime) },
             "add/remove" to { rows.install(runtime) },
+            "banner readability" to { readability.install(runtime) },
         )) runCatching(install).onFailure { runtime.log("Notification $name hooks unavailable; native behavior retained", it) }
     }
 }

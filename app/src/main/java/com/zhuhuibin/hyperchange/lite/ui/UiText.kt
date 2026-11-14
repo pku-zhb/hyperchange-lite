@@ -327,6 +327,8 @@ internal object UiTextCatalog {
         "音乐卡片材质" to R.string.ui_music_card_material,
         "整屏背景调节" to R.string.ui_full_screen_backdrop_tuning,
         "统一通知与音乐材质" to R.string.ui_unify_notification_and_music_materials,
+        "横幅通知可读性优化（实验性功能）" to R.string.ui_banner_readability_experimental,
+        "横幅通知" to R.string.ui_banner_notifications,
         "玻璃模糊" to R.string.ui_glass_blur,
         "卡片后方模糊" to R.string.ui_blur_behind_cards,
         "卡片取样尺度" to R.string.ui_card_sampling_scale,

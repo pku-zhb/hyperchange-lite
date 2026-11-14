@@ -9,6 +9,7 @@ object NotificationSettingsSpec {
             add(LiteSetting.number(key, title, group, default, min, max, step, summary))
         toggle(SettingsMigration.LOCKSCREEN_KEY, "锁屏通知材质", "通知作用范围", summary = "注意兼容")
         toggle(SettingsMigration.LOCKSCREEN_ANIMATIONS_KEY, "锁屏通知动画", "通知作用范围", summary = "注意兼容")
+        toggle("notification_banner_readability", "横幅通知可读性优化（实验性功能）", "横幅通知")
         val tilt = "通知按压"
         toggle("notification_press_tilt_enabled", "按压倾斜反馈", tilt, summary = "按住卡片时随落点倾斜并轻微缩小；开启后可调下方参数")
         toggle("notification_press_tilt_row_enabled", "对普通通知生效", tilt, true)

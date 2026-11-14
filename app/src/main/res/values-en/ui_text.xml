@@ -516,4 +516,6 @@
     <string name="ui_copy_includes_top_banners_enable_lock_screen_notification_material_separate">Includes top banners; enable Lock-screen notification material separately for the lock screen.</string>
     <string name="ui_copy_turn_off_when_another_module_customizes_the_player_background">Turn off when another module customizes the player background.</string>
     <string name="ui_copy_liquid_glass">Liquid glass</string>
+    <string name="ui_banner_readability_experimental">Banner notification readability (experimental)</string>
+    <string name="ui_banner_notifications">Banner notifications</string>
 </resources>
