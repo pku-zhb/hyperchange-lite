@@ -31,6 +31,7 @@ internal object GlassSurfaces {
         private var rowRead = false
         private var rowValue: View? = null
         private var headsUpValue: Boolean? = null
+        private var materialHeadsUpValue: Boolean? = null
         private var focusValue: Boolean? = null
         private var rootValue: View? = null
         val id get() = idValue ?: idNow(view).also { idValue = it }
@@ -45,6 +46,7 @@ internal object GlassSurfaces {
             return rowValue
         }
         val headsUp get() = headsUpValue ?: headsUpNow(view).also { headsUpValue = it }
+        val materialHeadsUp get() = materialHeadsUpValue ?: materialHeadsUpNow(view).also { materialHeadsUpValue = it }
         val focus get() = focusValue ?: focusNow(view).also { focusValue = it }
         val root get() = rootValue ?: materialRootNow(view).also { rootValue = it }
     }
@@ -62,6 +64,7 @@ internal object GlassSurfaces {
     fun media(view: View): Boolean = facts(view)?.media ?: mediaNow(view)
     fun row(view: View): View? = facts(view).let { if (it != null) it.row else rowNow(view) }
     fun headsUp(view: View): Boolean = facts(view)?.headsUp ?: headsUpNow(view)
+    fun materialHeadsUp(view: View): Boolean = facts(view)?.materialHeadsUp ?: materialHeadsUpNow(view)
     fun focus(view: View): Boolean = facts(view)?.focus ?: focusNow(view)
     fun materialRoot(view: View): View = facts(view)?.root ?: materialRootNow(view)
 
@@ -153,6 +156,10 @@ internal object GlassSurfaces {
 
     private fun headsUpNow(view: View): Boolean = row(view)?.let { row ->
         roleAccessors.headsUp(row) == true
+    } ?: false
+
+    private fun materialHeadsUpNow(view: View): Boolean = row(view)?.let { row ->
+        roleAccessors.materialHeadsUp(row) == true
     } ?: false
 
     private fun focusNow(view: View): Boolean = row(view)?.let { row ->

@@ -51,6 +51,14 @@ internal object NotificationScope {
         return if (GlassSurfaces.headsUp(view)) NotificationRole.HEADS_UP else NotificationRole.ORDINARY
     }
 
+    fun materialRole(view: View): NotificationRole {
+        decision(view)?.let { return it.role }
+        if (GlassSurfaces.media(view)) return NotificationRole.MEDIA
+        val row = GlassSurfaces.row(view)
+        synchronized(pendingRoles) { pendingRoles[row]?.let { return it } }
+        return if (GlassSurfaces.materialHeadsUp(view)) NotificationRole.HEADS_UP else NotificationRole.ORDINARY
+    }
+
     /** Whole-window effects require a confirmed foreground shade, independently of card permissions. */
     fun confirmedUnlocked(): Boolean {
         refreshSnapshot()
@@ -80,11 +88,11 @@ internal object NotificationScope {
     fun sceneAllows(view: View): Boolean {
         decision(view)?.let { return it.allowed }
         refreshSnapshot()
-        return NotificationScopePolicy.allows(readRole(view), lockscreenEffects, scene)
+        return NotificationScopePolicy.allows(materialRole(view), lockscreenEffects, scene)
     }
     fun token(view: View, ordinaryScene: Boolean = true): NotificationScopeToken {
         decision(view)?.let { return if (ordinaryScene) it.token else it.token.copy(generation = 0L) }
-        val role = role(view)
+        val role = materialRole(view)
         return token(view, role, ordinaryScene)
     }
 
@@ -99,7 +107,7 @@ internal object NotificationScope {
     /** One current decision for a synchronous setter's pure preparation, not a native call. */
     fun capture(view: View): NotificationScopeSnapshot {
         refreshSnapshot()
-        val role = readRole(view)
+        val role = materialRole(view)
         return NotificationScopeSnapshot(role, token(view, role, true),
             NotificationScopePolicy.allows(role, lockscreenEffects, scene), generation)
     }
@@ -119,6 +127,10 @@ internal object NotificationScope {
     }
 
     fun addListener(listener: () -> Unit) { synchronized(listeners) { listeners += listener } }
+
+    /** Report the already observed snapshot; a diagnostic read never publishes a scene. */
+    fun materialDiagnostics(): String = "scene=$scene pending=$pendingTransitions materialPermission=$lockscreenEffects " +
+        "animationPermission=$lockscreenAnimations materialEpoch=$sceneGeneration animationEpoch=$animationGeneration"
 
     @Synchronized fun install(runtime: HookRuntime) {
         if (installed || runtime.packageName != "com.android.systemui") return

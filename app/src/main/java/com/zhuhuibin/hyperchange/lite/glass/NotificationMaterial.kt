@@ -43,8 +43,13 @@ internal class NotificationMaterial(
     private val effectPrefix = "com.android.systemui.statusbar.notification.style.vieweffect."
     private val installedLoaders = WeakHashMap<ClassLoader, Boolean>()
     private var firstFailureLogged = false
+    private var lastLockscreenSelection = "none"
+    private var keyguardConversions = 0L
 
-    fun shouldUnify(view: View): Boolean = permitted(view) && selected(view) && !GlassSurfaces.excluded(view) && !GlassSurfaces.headsUp(view) &&
+    fun diagnostics(): String = "${native.diagnostics()} keyguardConversions=$keyguardConversions " +
+        "keyguardDecision=$lastLockscreenSelection convertedRoots=${synchronized(convertedLockscreenRoots) { convertedLockscreenRoots.size }}"
+
+    fun shouldUnify(view: View): Boolean = permitted(view) && selected(view) && !GlassSurfaces.excluded(view) && !GlassSurfaces.materialHeadsUp(view) &&
         (GlassSurfaces.media(view) || GlassSurfaces.focus(view))
 
     private fun active(view: View): Boolean = !GlassSurfaces.excluded(view) && permitted(view) &&
@@ -122,9 +127,19 @@ internal class NotificationMaterial(
         runtime.log("Native notification material effects installed: $found")
     }
 
-    private fun lockscreenSelected(view: View): Boolean = tuning() && permitted(view) &&
-        NotificationScope.confirmedLitKeyguard() && !GlassSurfaces.excluded(view) &&
-        !GlassSurfaces.media(view) && !GlassSurfaces.headsUp(view) && !GlassSurfaces.focus(view)
+    private fun lockscreenSelected(view: View): Boolean {
+        lastLockscreenSelection = when {
+            !tuning() -> "tuning-off"
+            !permitted(view) -> "scope-denied"
+            !NotificationScope.confirmedLitKeyguard() -> "not-settled-lit-keyguard"
+            GlassSurfaces.excluded(view) -> "excluded"
+            GlassSurfaces.media(view) -> "media"
+            GlassSurfaces.materialHeadsUp(view) -> "heads-up"
+            GlassSurfaces.focus(view) -> "focus"
+            else -> "selected"
+        }
+        return lastLockscreenSelection == "selected"
+    }
 
     /** Ordinary keyguard blur/normal effects have no glass token for the setter tuner to adjust. */
     private fun installLockscreenEffects(loader: ClassLoader) {
@@ -178,6 +193,7 @@ internal class NotificationMaterial(
             applying.set(true)
             try {
                 apply.invoke(current, root, context)
+                keyguardConversions++
                 materialTarget(root)?.let { target -> synchronized(convertedLockscreenRoots) {
                     convertedLockscreenRoots[root] = LockscreenConversion(name, root, target)
                 } }

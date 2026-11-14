@@ -16,6 +16,12 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
     private val loaders = WeakHashMap<ClassLoader, Boolean>()
     private val refreshing = ThreadLocal<Boolean>()
     private val selecting = ThreadLocal<View>()
+    private var rowSelections = 0L
+    private var mediaBindings = 0L
+    private var lastRefresh = "none"
+
+    fun diagnostics(): String = "rowBindings=${synchronized(rows) { rows.size }} rowSelections=$rowSelections " +
+        "mediaBindings=$mediaBindings mediaRoots=${synchronized(mediaInteractors) { mediaInteractors.size }} lastRefresh=$lastRefresh"
 
     fun selecting(view: View): Boolean = selecting.get() === view
 
@@ -32,6 +38,7 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
                 .apply { isAccessible = true }
             runtime.hook(update, "lite-material:current-row") { chain ->
                 val row = chain.getArg(1) as? View
+                rowSelections++
                 // A new native selector run supersedes a previous conversion, even
                 // when it reuses the same background object and transition alpha.
                 val interactor = chain.getArg(0)
@@ -60,6 +67,7 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
                 val header = chain.getArg(0) as? View
                 val interactor = chain.getArg(1)
                 if (header != null && interactor != null) {
+                    mediaBindings++
                     GlassSurfaces.markMediaRoot(header)
                     synchronized(mediaInteractors) { mediaInteractors[header] = WeakReference(interactor) }
                 }
@@ -89,31 +97,33 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
     }
 
     fun refresh(view: View): Boolean {
-        if (!view.isAttachedToWindow || refreshing.get() == true) return false
+        if (!view.isAttachedToWindow || refreshing.get() == true) { lastRefresh = "detached-or-reentrant"; return false }
         if (GlassSurfaces.media(view)) return refreshMedia(view)
-        val binding = synchronized(rows) { rows[view] } ?: return false
+        val binding = synchronized(rows) { rows[view] } ?: run { lastRefresh = "missing-row-binding"; return false }
         val interactor = binding.args.getOrNull(0) ?: return false
         // The native selector intentionally does no material work during this transition.
         val aod = field(interactor, "notifiFullAodController") ?: return false
-        if (field(aod, "mWillDoAodAnim") != false) return false
+        if (field(aod, "mWillDoAodAnim") != false) { lastRefresh = "row-aod-transition"; return false }
         refreshing.set(true)
         return try {
             // Target ROM's four-argument binder always selects/applies current flows.
             // Keep its previous-effect reference intact: it owns required clear steps.
             binding.method.invoke(null, *binding.args.copyOf().also { it[1] = view })
+            lastRefresh = "row-selector-returned"
             true
         } catch (error: Throwable) {
             runtime.log("Current notification material refresh failed", error)
+            lastRefresh = "row-selector-failed"
             false
         } finally { refreshing.remove() }
     }
 
     private fun refreshMedia(view: View): Boolean {
-        val interactor = synchronized(mediaInteractors) { mediaInteractors[view]?.get() } ?: return false
+        val interactor = synchronized(mediaInteractors) { mediaInteractors[view]?.get() } ?: run { lastRefresh = "missing-media-binding"; return false }
         val aod = field(interactor, "notifiFullAodController") ?: return false
         // The native collector deliberately suppresses material writes during this
         // transition. Do not claim a rebind or replay an older effect through it.
-        if (field(aod, "mWillDoAodAnim") != false) return false
+        if (field(aod, "mWillDoAodAnim") != false) { lastRefresh = "media-aod-transition"; return false }
         refreshing.set(true)
         return try {
             val injector = view.javaClass.getMethod("getInjector").invoke(view) ?: return false
@@ -123,9 +133,12 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
             // MediaViewBinder's existing combine collector ignores the event payload,
             // reads the current state flows and applies the selected current effect.
             // Calling bind() again would install a second collector and is forbidden.
-            events.javaClass.getMethod("tryEmit", Any::class.java).invoke(events, unit) == true
+            (events.javaClass.getMethod("tryEmit", Any::class.java).invoke(events, unit) == true).also {
+                lastRefresh = if (it) "media-event-admitted" else "media-event-rejected"
+            }
         } catch (error: Throwable) {
             runtime.log("Current media material update request failed", error)
+            lastRefresh = "media-event-failed"
             false
         } finally { refreshing.remove() }
     }

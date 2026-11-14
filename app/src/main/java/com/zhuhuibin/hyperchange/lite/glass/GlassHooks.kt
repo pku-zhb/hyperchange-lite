@@ -35,7 +35,7 @@ private class SystemGlass(private val runtime: HookRuntime) {
         headsUpGlassAllowed(state.headsUp, state.glass.enabled, state.notifications, NotificationScope.confirmedUnlocked())
     }) { view ->
         notificationPolicy().force(GlassSurfaces.media(view), NotificationScope.sceneAllows(view),
-            NotificationScope.role(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
+            NotificationScope.materialRole(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
     }
     private val window: WindowBackdropHooks = WindowBackdropHooks(runtime, { state.shadeGlass }, ::nativeBackdropBackground)
     private fun nativeBackdropBackground(view: android.view.View): Unit = engine.observeNativeBackdropBackground(view)
@@ -96,6 +96,13 @@ private class SystemGlass(private val runtime: HookRuntime) {
         runtime.preferences.registerOnSharedPreferenceChangeListener(listener)
         engine.install()
         window.install()
+        MaterialDiagnostics.install(runtime) {
+            "hc-lite material\n" +
+                "settings: glass=${state.glass.enabled} notifications=${state.notifications} media=${state.media} unify=${state.unify}\n" +
+                "scope: ${NotificationScope.materialDiagnostics()}\n" +
+                "effects: ${normal.diagnostics()}\n" +
+                "setters: ${engine.diagnostics()}"
+        }
     }
     private fun refresh(sceneOnly: Boolean = false) {
         runCatching { normal.refresh(sceneOnly) }.onFailure { runtime.log("Notification material refresh cancelled safely", it) }

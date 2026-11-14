@@ -62,5 +62,73 @@ ancestry was the observed device cause.
 Focused policy/migration tests cover the default-off split, settled keyguard,
 unknown/AOD/transition denial, legacy imports, partial presets and current
 keyguard/light-wallpaper selection. Production source is checked on the host.
-This iteration does not connect to or operate a phone; visual material, native
-completion and coexistence behavior remain owner acceptance.
+The original scope split was host-verified. Later read-only module logs and
+preference inspection confirmed the SystemUI material hooks are installed and
+the owner's material ranges are enabled. Visual material, native completion and
+coexistence behavior remain owner acceptance.
+
+## Material identity after a heads-up disappearance
+
+The retained ROM's `ExpandableNotificationRow.isHeadsUpState()` returns
+`mIsHeadsUp || mHeadsupDisappearRunning`. That is a display/animation state,
+not the identity used by `bindInternal$updateEffect`. Its material selector reads
+the current row view model's `headUpState` and `hasCalledHUNDragDownDisappear`
+flows. The previous classifier could reject ordinary keyguard conversion while
+only the old disappearance-animation flag remained true.
+
+Material classification now reads the same two live flows. A supported false
+result is authoritative even while `isHeadsUpState()` remains true. Animation
+classification keeps its original display getter. Missing/unsupported model
+members or failed reads fall back to the previous getter; reflection metadata
+is cached, but flow values and view models are never cached across calls. Both
+true native flags still classify the material as heads-up.
+
+## Selection and refresh trace
+
+1. `NativeMaterialRebind` resolves the exact retained four-argument static row
+   selector: interactor, row, `NotificationViewType`, `Ref$ObjectRef`. It stores
+   its current interactor/type/effect reference before the native call. The
+   retained media binder has the expected `(MiuiMediaHeaderView, interactor)`
+   signature. Current SystemUI module logs contain 16 focus/media effect hooks;
+   later plugin-only class-loader failures do not undo those installed hooks.
+2. `NotificationScope` observes the keyguard, status-bar, screen and wakefulness
+   controllers. Current module logs report five supported method signals. An
+   active controller boundary denies ordinary keyguard conversion; its final
+   state publication changes the material epoch and schedules a current rebind.
+   Snapshot refresh also reads fade flags directly because this ROM has no
+   matching fade-complete callback. Unknown fields never mean settled keyguard.
+3. Material role/permission and the current scene are captured only for a pure
+   setter preparation. `MaterialCallMemo` exists only inside that synchronous
+   preparation and is discarded before calling native code. A scene revision,
+   role or parent change invalidates the decision; there is no frame-to-frame
+   cached permission or cached heads-up Boolean.
+4. Current NORMAL/BLUR ordinary effects may convert only when the live keyguard
+   gate and ordinary range allow it. Existing glass effects are tuned in native
+   View setters. Media/focus normalization is independent. AOD's selected native
+   effect is not replaced with a forced ordinary keyguard effect.
+5. Refresh admission is deduplicated per root/configuration/material epoch.
+   Detached roots, a missing binding, an AOD-transition deferral or an invocation
+   failure return false and release the claim. MEDIA now carries the material
+   scene epoch too, so an AOD/wake round trip cannot be mistaken for a previously
+   completed media refresh. The media path emits into the existing collector;
+   it never calls `bind()` again. A successful selector return or admitted event
+   is explicitly not proof of a GPU material commit.
+
+## Read-only diagnosis
+
+After loading this version, use:
+
+```sh
+adb shell dumpsys activity service com.android.systemui/.SystemUIService hc-lite-material
+```
+
+Only that exact dump argument is handled by Lite. It prints observed scope
+fields, material/animation permissions and epochs, current binding counts, last
+native refresh result, keyguard conversion decisions, and native notification
+glass-setter/tuned/denied counts. It contains no notification text, view IDs,
+phone identifiers or credentials and adds no broadcast receiver. Reading the
+dump does not publish a new scene, request a refresh or change settings.
+
+This distinguishes a denied scope or missed binder from a card that did receive
+changed glass values. HMC capsule relay capture/application remains a separate
+downstream result; Lite's enabled App switches alone prove neither result.

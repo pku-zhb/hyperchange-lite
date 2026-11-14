@@ -14,6 +14,7 @@ internal class SurfaceRoleAccessors(
     private class FocusAccess(val focus: Method?)
     private val rows = ConcurrentHashMap<Class<*>, RowAccess>()
     private val injectors = ConcurrentHashMap<Class<*>, FocusAccess>()
+    private val materialRoles = NativeNotificationRole()
 
     private fun rowAccess(type: Class<*>): RowAccess = rows[type] ?: rows.computeIfAbsent(type) {
         // A supported primary getter returning false is authoritative. The legacy name is
@@ -24,6 +25,11 @@ internal class SurfaceRoleAccessors(
     fun headsUp(row: Any): Boolean? = runCatching {
         rowAccess(row.javaClass).headsUp?.invoke(row) as? Boolean
     }.getOrNull()
+
+    fun materialHeadsUp(row: Any): Boolean? {
+        val injector = runCatching { rowAccess(row.javaClass).injector?.invoke(row) }.getOrNull()
+        return injector?.let(materialRoles::headsUp) ?: headsUp(row)
+    }
 
     fun focus(row: Any): Boolean? = runCatching {
         val injector = rowAccess(row.javaClass).injector?.invoke(row) ?: return@runCatching null
