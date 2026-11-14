@@ -8,7 +8,7 @@
   banner's exit reported native restoration, with no active sampler. Disabling
   the setting restored its original false value; sampler/session state remained
   inactive. The temporary local test notifications, channel and device helper
-  were removed. No screenshot, full reboot, other App's message or credential
+  were removed. No screenshot, full reboot, outbound message or credential
   input was used. Perceived text contrast, final refraction and span appearance
   remain visual acceptance; these diagnostics do not measure a WCAG ratio.
 - The complete JVM suite passes 324 tests in 56 suites, without failures,
