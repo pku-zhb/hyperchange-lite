@@ -51,17 +51,27 @@ internal class NotificationMaterial(
     private var firstFailureLogged = false
     private var lastLockscreenSelection = "none"
     private var keyguardConversions = 0L
+    private var keyguardNormalRecipes = 0L
 
     fun diagnostics(): String = "${native.diagnostics()} keyguardConversions=$keyguardConversions " +
-        "keyguardDecision=$lastLockscreenSelection convertedRoots=${synchronized(convertedLockscreenRoots) { convertedLockscreenRoots.size }}"
+        "keyguardDecision=$lastLockscreenSelection keyguardNormalRecipes=$keyguardNormalRecipes convertedRoots=${synchronized(convertedLockscreenRoots) { convertedLockscreenRoots.size }}"
 
     fun shouldUnify(view: View): Boolean = permitted(view) && selected(view) && !GlassSurfaces.excluded(view) && !GlassSurfaces.materialHeadsUp(view) &&
-        (GlassSurfaces.media(view) || GlassSurfaces.focus(view))
+        (GlassSurfaces.media(view) || GlassSurfaces.focus(view) ||
+            native.root(view)?.let { native.lockscreenGlassEffect(it) != null } == true)
 
     private fun active(view: View): Boolean = !GlassSurfaces.excluded(view) && permitted(view) &&
         (tuning() || shouldUnify(view))
 
-    fun normalRecipe(view: View): FloatArray? = normalRecipe(view.context)
+    private fun ordinaryRow(view: View): Boolean = !GlassSurfaces.media(view) && !GlassSurfaces.focus(view) &&
+        GlassSurfaces.row(view) != null
+
+    fun normalRecipe(view: View): FloatArray? {
+        if (!ordinaryRow(view)) return normalRecipe(view.context)
+        val root = native.root(view) ?: return null
+        val context = native.lockscreenMaterialContext(root) ?: return null
+        return normalRecipe(context)?.also { keyguardNormalRecipes++ }
+    }
 
     private fun normalRecipe(context: Context): FloatArray? {
         val resource = runCatching {
@@ -83,7 +93,10 @@ internal class NotificationMaterial(
     fun normalBlends(view: View): ArrayList<Point>? {
         if (!shouldUnify(view)) return null
         return runCatching {
-            val resources = view.context.createPackageContext("com.android.systemui", 0).resources
+            val resources = if (ordinaryRow(view)) {
+                val root = native.root(view) ?: return@runCatching null
+                native.lockscreenMaterialContext(root)?.resources ?: return@runCatching null
+            } else view.context.createPackageContext("com.android.systemui", 0).resources
             ArrayList((1..2).map { index ->
                 val color = resources.getIdentifier("notification_element_blend_shade_color_$index", "color", "com.android.systemui")
                 val mode = resources.getIdentifier("notification_element_blend_shade_mode_$index", "integer", "com.android.systemui")
@@ -416,7 +429,9 @@ internal class NotificationMaterial(
     }
 
     private fun applyNormal(view: View, loader: ClassLoader, media: Boolean) {
-        if (applying.get() == true || !shouldUnify(view)) return
+        // Ordinary keyguard unification changes setter inputs only. Its native
+        // keyguard effect continues to own lifecycle, sampling and AOD selection.
+        if (applying.get() == true || !shouldUnify(view) || ordinaryRow(view)) return
         val ticket = generation.value
         val scene = NotificationScope.token(view)
         applying.set(true)

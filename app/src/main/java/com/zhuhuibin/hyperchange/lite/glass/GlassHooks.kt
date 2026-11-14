@@ -35,7 +35,8 @@ private class SystemGlass(private val runtime: HookRuntime) {
         headsUpGlassAllowed(state.headsUp, state.glass.enabled, state.notifications, NotificationScope.confirmedUnlocked())
     }) { view ->
         notificationPolicy().force(GlassSurfaces.media(view), NotificationScope.sceneAllows(view),
-            NotificationScope.materialRole(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP, GlassSurfaces.focus(view))
+            NotificationScope.materialRole(view) == com.zhuhuibin.hyperchange.lite.scope.NotificationRole.HEADS_UP,
+            GlassSurfaces.focus(view), ordinaryKeyguard = NotificationScope.confirmedLitKeyguard())
     }
     private val window: WindowBackdropHooks = WindowBackdropHooks(runtime, { state.shadeGlass }, ::nativeBackdropBackground)
     private fun nativeBackdropBackground(view: android.view.View): Unit = engine.observeNativeBackdropBackground(view)

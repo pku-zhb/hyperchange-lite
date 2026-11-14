@@ -163,3 +163,30 @@ native effect enum on demand. The counter stage is explicitly `viewSetterRoles`:
 it proves a View-level argument adjustment, not a downstream RenderNode/GPU
 commit or visual transparency. No notification text, IDs or recipe payloads are
 included, and enum reflection/string formatting run only on the explicit dump.
+
+
+## Unified ordinary material on the settled lit keyguard
+
+The previous unification path normalized only media and focus/live cards.
+Ordinary keyguard rows could reach the enabled View setter tuner and receive
+changed arguments while retaining a substantially different keyguard base recipe.
+For example, the retained normal and keyguard recipes differ in their first four
+slots, which the exposed tuning controls intentionally do not overwrite. A changed
+ordinary setter therefore did not imply the same material as a normalized player.
+
+With the existing unification option enabled, ordinary rows now use the normal
+base recipe and shade blend colors only when the ordinary range permits it, the
+scope is confirmed settled lit keyguard, and that exact row's current native
+interactor confirms keyguard notification state, known wallpaper mode, no full AOD
+and no native AOD animation. The recipe and colors resolve from that interactor's
+current `getFixUiModeContext(notifStyle, false)`, preserving its current day/night
+resource selection. Unknown state or unavailable context leaves the native recipe.
+
+This is setter-level unification, not replacement of the ordinary row effect.
+The native keyguard effect retains sampling, lifecycle and AOD ownership. The
+full normal-effect replay remains restricted to its existing media/focus targets.
+Disabling unification, heads-up rows, unlocked ordinary notifications, AOD and
+native-busy rows retain their existing base selection. Material permission does
+not enable any lockscreen animation. `keyguardNormalRecipes` counts successful
+ordinary normal-base selections, alongside the separate View setter role counters;
+neither counter is visual/GPU acceptance.

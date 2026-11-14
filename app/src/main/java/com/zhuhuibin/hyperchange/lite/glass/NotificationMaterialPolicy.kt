@@ -16,8 +16,9 @@ internal data class NotificationMaterialPolicy(
 
     fun tune(isMedia: Boolean, sceneAllowed: Boolean): Boolean = tuning && range(isMedia, sceneAllowed)
 
-    fun force(isMedia: Boolean, sceneAllowed: Boolean, headsUp: Boolean, focus: Boolean): Boolean =
-        unify && range(isMedia, sceneAllowed) && !headsUp && (isMedia || focus)
+    fun force(isMedia: Boolean, sceneAllowed: Boolean, headsUp: Boolean, focus: Boolean,
+              ordinaryKeyguard: Boolean = false): Boolean =
+        unify && range(isMedia, sceneAllowed) && !headsUp && (isMedia || focus || ordinaryKeyguard)
 }
 
 /** A queued material operation must belong to the current configuration/scene. */

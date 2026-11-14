@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package com.zhuhuibin.hyperchange.lite.glass
 
+import android.content.Context
 import android.view.View
 import com.zhuhuibin.hyperchange.lite.HookRuntime
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
@@ -123,18 +124,34 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime,
     fun roots(): List<View> = (synchronized(rows) { rows.keys.toList() } +
         synchronized(mediaInteractors) { mediaInteractors.filterValues { it.get() != null }.keys.toList() }).distinct()
 
+    private class KeyguardSelection(val interactor: Any, val state: Any, val effect: String)
+
     /** Same state used by bindInternal$updateEffect, read only for its current ordinary row. */
-    fun lockscreenGlassEffect(view: View): String? {
+    private fun keyguardSelection(view: View): KeyguardSelection? {
         val interactor = synchronized(rows) { rows[view] }?.args?.getOrNull(0) ?: return null
         val aod = field(interactor, "notifiFullAodController") ?: return null
         val delegate = field(interactor, "materialViewState\$delegate") ?: return null
         val flow = call(delegate, "getValue") ?: return null
         val current = call(flow, "getValue") ?: return null
-        return LockscreenRowMaterialPolicy.effect(NotificationScope.confirmedLitKeyguard(),
+        val effect = LockscreenRowMaterialPolicy.effect(NotificationScope.confirmedLitKeyguard(),
             field(current, "isShowingKeyguardNotification") as? Boolean,
             field(current, "isLightWallPaper") as? Boolean,
             call(interactor, "shouldApplyFullAodEffect") as? Boolean,
-            field(aod, "mWillDoAodAnim") as? Boolean)
+            field(aod, "mWillDoAodAnim") as? Boolean) ?: return null
+        return KeyguardSelection(interactor, current, effect)
+    }
+
+    fun lockscreenGlassEffect(view: View): String? = keyguardSelection(view)?.effect
+
+    /** Reuse the current selector's day/night context, never an old row/theme context. */
+    fun lockscreenMaterialContext(view: View): Context? {
+        val selected = keyguardSelection(view) ?: return null
+        val style = field(selected.state, "notifStyle") ?: return null
+        return runCatching {
+            val method = selected.interactor.javaClass.getMethod("getFixUiModeContext", style.javaClass,
+                Boolean::class.javaPrimitiveType)
+            method.invoke(selected.interactor, style, false) as? Context
+        }.getOrNull()
     }
 
     fun refresh(view: View): Boolean {

@@ -30,6 +30,24 @@ class NotificationMaterialPolicyTest {
         assertFalse(policy.force(isMedia = false, sceneAllowed = true, headsUp = true, focus = true))
     }
 
+    @Test fun ordinaryKeyguardUnificationRequiresItsRangeAndTheExistingUnifySwitch() {
+        for (ordinary in listOf(false, true)) for (unify in listOf(false, true))
+            for (scene in listOf(false, true)) for (headsUp in listOf(false, true))
+                for (currentLitKeyguard in listOf(false, true)) {
+                    val policy = NotificationMaterialPolicy(ordinary, true, false, unify)
+                    assertEquals(ordinary && unify && scene && !headsUp && currentLitKeyguard,
+                        policy.force(false, scene, headsUp, false, ordinaryKeyguard = currentLitKeyguard))
+                }
+    }
+
+    @Test fun ordinaryUnlockedAndUnknownKeyguardKeepTheirNativeBaseRecipe() {
+        val policy = NotificationMaterialPolicy(true, true, true, true)
+        assertFalse(policy.force(false, true, false, false))
+        assertFalse(policy.force(false, true, false, false, ordinaryKeyguard = false))
+        assertTrue(policy.force(false, true, false, false, ordinaryKeyguard = true))
+        assertFalse(policy.copy(unify = false).force(false, true, false, false, ordinaryKeyguard = true))
+    }
+
     @Test fun allPermissionCombinationsObeyRangeBeforeFeatureFlags() {
         for (ordinary in listOf(false, true)) for (media in listOf(false, true))
             for (tuning in listOf(false, true)) for (unify in listOf(false, true))
