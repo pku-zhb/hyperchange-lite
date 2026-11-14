@@ -2,6 +2,15 @@
 
 ## 0.1.10 experimental banner text readability
 
+- Live device check: the owner supplied a real heads-up notification after
+  authentication. The native helper reported supported sampling, three accepted
+  scalar samples across bounded bursts and a valid median brightness. The
+  banner's exit reported native restoration, with no active sampler. Disabling
+  the setting restored its original false value; sampler/session state remained
+  inactive. The temporary local test notifications, channel and device helper
+  were removed. No screenshot, full reboot, other App's message or credential
+  input was used. Perceived text contrast, final refraction and span appearance
+  remain visual acceptance; these diagnostics do not measure a WCAG ratio.
 - The complete JVM suite passes 324 tests in 56 suites, without failures,
   errors or skips; Debug lint and `git diff --check` pass. The delivery package
   is assembled separately from clean committed, pushed source with the retained

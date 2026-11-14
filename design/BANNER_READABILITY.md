@@ -80,6 +80,9 @@ Host policy tests cover invalid/no samples, primary/secondary roles, native-ID
 admission, hysteresis/hold, bounded bursts, cancellation/replacement and native
 ownership restoration. Settings tests cover the exact title, default/reset,
 partial imports and round trips; normal localization/editor checks cover reachability.
-The native callback, actual surface exclusion, span behavior on real OEM RemoteViews,
-readability and compositor cost still require device acceptance. No phone work,
-new version, signed delivery or installation is part of this source change.
+The subsequent 0.1.10 live check confirmed the native helper accepts actual
+compositor samples for a real heads-up banner and cleans up on exit/disable.
+The default-off value and temporary test artifacts were restored. The accepted
+sample contract requires a valid stop surface; the diagnostic does not prove
+final pixel contrast, visual span appearance or the compositor's total cost.
+See [validation](VALIDATION.md) for host and device evidence separately.
