@@ -79,16 +79,17 @@ class ControlVolumeHooks {
                     val receiver = chain.thisObject ?: return@hook chain.proceed()
                     val view = viewFor(receiver) ?: return@hook chain.proceed()
                     val active = p.getBoolean("cc_radius_enabled", false)
+                    val configured = if (active) number(key, 26f) * view.resources.displayMetrics.density else null
+                    val radius = if (key == "cc_slider_radius") SliderRadiusPolicy.configured(method.name, configured) else configured
                     if (method.parameterCount == 0) {
                         val original = chain.proceed()
-                        if (active) number(key, 26f) * view.resources.displayMetrics.density else original
+                        radius ?: original
                     } else {
                         val incoming = chain.getArg(0) as Float
                         val baseline = radiusCalls.getOrPut(receiver) { mutableMapOf() }
                             .getOrPut(method) { RadiusBaseline(incoming) }
                         val args = chain.args.toTypedArray()
-                        args[0] = baseline.resolve(incoming,
-                            if (active) number(key, 26f) * view.resources.displayMetrics.density else null,
+                        args[0] = baseline.resolve(incoming, radius,
                             refreshing.get() != true, freshResourceValue = sliderResourceOwner.get() === receiver)
                         val previous = radiusDispatch.get()
                         radiusDispatch.set(key)
@@ -98,8 +99,10 @@ class ControlVolumeHooks {
                             if (key in setOf("cc_media_radius", "cc_secondary_radius")) {
                                 (view.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).cornerRadius = args[0] as Float }
                             }
-                            if (key == "cc_slider_radius") {
-                                sliderRadiusParts(receiver, method.name == "setProgressRadius").forEach { part ->
+                            if (key == "cc_slider_radius" && method.name == "setOutlineRadius") {
+                                // Native progress clipping owns the horizontal fill edge.
+                                // Only the enclosing track follows the user's corner radius.
+                                sliderRadiusParts(receiver, false).forEach { part ->
                                     (part.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).cornerRadius = args[0] as Float }
                                 }
                             }

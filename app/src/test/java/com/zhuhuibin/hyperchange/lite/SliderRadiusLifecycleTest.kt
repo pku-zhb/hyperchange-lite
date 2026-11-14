@@ -4,15 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SliderRadiusLifecycleTest {
-    @Test fun independentTrackAndFillRestoreTheirOwnNativeValues() {
+    @Test fun customTrackKeepsTheNativeMovingFillBoundary() {
         val outline = RadiusBaseline(40f)
         val progress = RadiusBaseline(24f)
-        assertEquals(64f, outline.resolve(40f, 64f), 0f)
-        assertEquals(64f, progress.resolve(24f, 64f), 0f)
+        assertEquals(64f, outline.resolve(40f, SliderRadiusPolicy.configured("setOutlineRadius", 64f)), 0f)
+        assertEquals(24f, progress.resolve(24f, SliderRadiusPolicy.configured("setProgressRadius", 64f)), 0f)
         // A replacement drawable receives the saved native input, not last output.
-        assertEquals(64f, progress.resolve(progress.original, 64f, false), 0f)
+        assertEquals(24f, progress.resolve(progress.original, SliderRadiusPolicy.configured("setProgressRadius", 64f), false), 0f)
         assertEquals(40f, outline.resolve(outline.original, null, false), 0f)
         assertEquals(24f, progress.resolve(progress.original, null, false), 0f)
+    }
+
+    @Test fun secondaryVolumeFillGetterNeverAcquiresTheTrackOverride() {
+        assertEquals(64f, SliderRadiusPolicy.configured("getCornerRadius", 64f)!!, 0f)
+        assertNull(SliderRadiusPolicy.configured("getProgressRadius", 64f))
+        assertNull(SliderRadiusPolicy.configured("setProgressRadius", 64f))
+        assertNull(SliderRadiusPolicy.configured("getCornerRadius", null))
     }
 
     @Test fun aDensityOrSizeUpdateRebasesBothChannelsBeforeTheNextDisable() {
