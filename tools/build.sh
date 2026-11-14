@@ -32,6 +32,6 @@ export TMPDIR="$cache/tmp"
 mkdir -p "$LITE_BUILD_ROOT" "$TMPDIR" "$cache/project-cache" "$cache/kotlin"
 if [[ $# == 0 ]]; then set -- :app:testDebugUnitTest :app:assembleDebug; fi
 cd "$project_root"
-exec ./gradlew --no-daemon --console=plain --max-workers=4 \
+exec ./gradlew --no-daemon --console=plain --max-workers="${LITE_GRADLE_MAX_WORKERS:-4}" \
     --project-cache-dir "$cache/project-cache" -I tools/gradle-init.gradle \
     "-Djava.io.tmpdir=$TMPDIR" "-Pkotlin.project.persistent.dir=$cache/kotlin" "$@"
