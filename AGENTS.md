@@ -1,5 +1,22 @@
 # hc-lite
 
+## Latest visual investigation workflow
+
+The owner authorizes screenshots and recordings for independent visual review.
+A fresh reviewer without inherited conversation history should capture and inspect
+the relevant behavior; the coordinating root receives text findings and should
+not view the images/video. Root may grant that reviewer an exclusive device lease,
+overriding the older root-only operation convention below for the review's duration.
+Other agents must not operate the phone concurrently. Never reboot or bypass
+authentication; restore temporary settings/playback and preserve floating windows.
+Watch complete transitions first and use slow motion/selected frames where useful;
+exhaustive frame-by-frame inspection is unnecessary. Verify capture fidelity before
+calling missing AOD/glass layers a rendering defect. Keep raw evidence in DevCache,
+not synced Drive/Git, and integrate readable findings into the existing rolling
+document. Distinguish observed visuals, source findings and causal hypotheses.
+When research before implementation is requested, present the report before app
+changes. A live sampler or successful tests alone do not prove readable text.
+
 This repository is the owner of hc-lite, an intentionally reduced fork of
 ColdP/HyperChanger. Its package is `com.zhuhuibin.hyperchange.lite`.
 The fork is `pku-zhb/hc-lite`; its owning checkout is
