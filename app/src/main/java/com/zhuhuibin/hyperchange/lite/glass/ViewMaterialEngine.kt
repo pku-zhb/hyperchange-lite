@@ -11,6 +11,7 @@ import com.zhuhuibin.hyperchange.lite.HookRuntime
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScope
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScopeSnapshot
 import com.zhuhuibin.hyperchange.lite.scope.NotificationScopeToken
+import com.zhuhuibin.hyperchange.lite.scope.NotificationRole
 import com.zhuhuibin.hyperchange.lite.scope.ShadeScope
 import java.lang.reflect.Method
 import java.lang.ref.WeakReference
@@ -73,6 +74,9 @@ internal class ViewMaterialEngine(
     private var notificationGlassCalls = 0L
     private var notificationGlassChanges = 0L
     private var notificationGlassDenied = 0L
+    private val roleGlassCalls = LongArray(NotificationRole.entries.size)
+    private val roleGlassChanges = LongArray(NotificationRole.entries.size)
+    private val roleGlassDenied = LongArray(NotificationRole.entries.size)
     private class Prepared(val input: Array<Any?>, val args: Array<Any?>, val ticket: Long,
                            val scene: NotificationScopeSnapshot?, val parent: Any?, val backdropRevision: Long?,
                            val suppress: Boolean = false)
@@ -179,6 +183,10 @@ internal class ViewMaterialEngine(
                     if (surface == GlassSurface.NOTIFICATION && name == "setMiGlass") {
                         notificationGlassCalls++
                         if (!allowed) notificationGlassDenied++
+                        scene?.role?.ordinal?.let { role ->
+                            roleGlassCalls[role]++
+                            if (!allowed) roleGlassDenied[role]++
+                        }
                     }
                     if (isBackdrop(view) && name in backdropWriteChannels && nativeBackdropWrite != null && backdropWrite == null)
                         return@prepare null
@@ -199,8 +207,10 @@ internal class ViewMaterialEngine(
                     val backdropRevision = if (isBackdrop(view)) ShadeScope.generation else null
                     Prepared(input, adjustPrepared(view, method, input, surface, scene, false), ticket, scene, parent, backdropRevision)
                 } ?: return@hook if (skipBackdropReplay(view)) null else chain.proceed()
-                if (name == "setMiGlass" && prepared.scene != null && !sameArgs(prepared.input, prepared.args))
+                if (name == "setMiGlass" && prepared.scene != null && !sameArgs(prepared.input, prepared.args)) {
                     notificationGlassChanges++
+                    roleGlassChanges[prepared.scene.role.ordinal]++
+                }
                 if (!ready(view, prepared)) {
                     forget(view)
                     return@hook if (skipBackdropReplay(view)) null else chain.proceed()
@@ -426,7 +436,10 @@ internal class ViewMaterialEngine(
 
     fun diagnostics(): String = "notificationGlassCalls=$notificationGlassCalls changed=$notificationGlassChanges " +
         "denied=$notificationGlassDenied baselines=${synchronized(baselines) { baselines.size }} " +
-        "owned=${synchronized(baselines) { owned.size }}"
+        "owned=${synchronized(baselines) { owned.size }} viewSetterRoles=" +
+        NotificationRole.entries.joinToString(";") { role ->
+            "${role.name}(calls=${roleGlassCalls[role.ordinal]},changed=${roleGlassChanges[role.ordinal]},denied=${roleGlassDenied[role.ordinal]})"
+        }
 
     private fun sameArgs(left: Array<Any?>, right: Array<Any?>): Boolean =
         left.size == right.size && left.indices.all { index ->

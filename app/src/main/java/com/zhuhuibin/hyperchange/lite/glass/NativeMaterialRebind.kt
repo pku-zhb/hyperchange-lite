@@ -22,10 +22,19 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime,
     private var lastRefresh = "none"
     private val deferred = DeferredMaterialRoots<View, Any>()
     private var transitionRetries = 0L
+    private var lastRow = WeakReference<View>(null)
 
     fun diagnostics(): String = "rowBindings=${synchronized(rows) { rows.size }} rowSelections=$rowSelections " +
         "mediaBindings=$mediaBindings mediaRoots=${synchronized(mediaInteractors) { mediaInteractors.size }} lastRefresh=$lastRefresh " +
-        "deferredRoots=${deferred.size()} transitionRetries=$transitionRetries"
+        "deferredRoots=${deferred.size()} transitionRetries=$transitionRetries lastRowEffect=${lastRowEffect()}"
+
+    /** Read only on an explicit dump: no new reflection/string building in native row frames. */
+    private fun lastRowEffect(): String {
+        val row = lastRow.get() ?: return "unavailable"
+        val reference = synchronized(rows) { rows[row] }?.args?.getOrNull(3) ?: return "unavailable"
+        val effect = field(reference, "element") ?: return "none"
+        return (effect as? Enum<*>)?.name ?: effect.javaClass.simpleName
+    }
 
     fun selecting(view: View): Boolean = selecting.get() === view
 
@@ -56,6 +65,7 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime,
                     val args = Array<Any?>(4) { if (it == 1) null else chain.getArg(it) }
                     synchronized(rows) { rows[row] = RowBinding(update, args) }
                 }
+                if (row != null) lastRow = WeakReference(row)
                 val previous = selecting.get()
                 if (row != null) selecting.set(row)
                 try { chain.proceed() } finally {

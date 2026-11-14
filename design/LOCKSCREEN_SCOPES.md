@@ -156,3 +156,10 @@ disabled material ranges. Unknown native state does not create a retry.
 This does not poll, create a new collector, write native transition flags,
 replay a cached recipe or tune clock/lyrics/position animations. Deferred-root
 and completion-retry counters are included in the existing read-only dump.
+
+The dump also separates glass setter calls, changed arguments and denied calls
+into ORDINARY, MEDIA and HEADS_UP roles, and reads the last row binder's exact
+native effect enum on demand. The counter stage is explicitly `viewSetterRoles`:
+it proves a View-level argument adjustment, not a downstream RenderNode/GPU
+commit or visual transparency. No notification text, IDs or recipe payloads are
+included, and enum reflection/string formatting run only on the explicit dump.
