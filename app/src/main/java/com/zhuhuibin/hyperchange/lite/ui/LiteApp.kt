@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -57,8 +59,9 @@ fun LiteApp(
     wallpaperUri: String?, wallpaperStyle: Int,
     onChooseImage: () -> Unit, onWallpaperStyle: (Int) -> Unit,
     themeMode: Int, language: String,
-    floatingNavigation: Boolean, appBlur: Boolean,
+    floatingNavigation: Boolean, appBlur: Boolean, liquidNavigation: Boolean,
     onFloatingNavigation: (Boolean) -> Unit, onAppBlur: (Boolean) -> Unit,
+    onLiquidNavigation: (Boolean) -> Unit,
     onThemeMode: (Int) -> Unit, onLanguage: (String) -> Unit,
 ) {
     val mode = when (themeMode) {
@@ -97,22 +100,38 @@ fun LiteApp(
     val back = { page = when (page) { "theme" -> "settings"; "credits", "licenses" -> "about"; else -> "home" } }
     BackHandler(page != "home" && editKey == null && !resetDialog) { back() }
     MiuixTheme(controller = theme) {
+        val view = LocalView.current
+        val dark = appIsDarkTheme()
+        SideEffect {
+            val window = (view.context as? android.app.Activity)?.window
+            if (window != null) WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
         val surface = MiuixTheme.colorScheme.surface
         val backdrop = rememberLayerBackdrop { drawRect(surface); drawContent() }
         Scaffold(topBar = {
-            SmallTopAppBar(
-                title = uiText(feature?.title ?: when (page) { "settings" -> "设置"; "about" -> "关于"; "theme" -> "界面主题"; "credits" -> "致谢"; "licenses" -> "开源许可"; else -> "主页" }),
-                navigationIcon = {
-                    if (feature != null || secondaryPage) IconButton(onClick = back) {
-                        Icon(MiuixIcons.Basic.ArrowRight, uiText("返回"), Modifier.size(20.dp).graphicsLayer { rotationZ = 180f })
-                    }
-                },
-            )
+            if (page != "about") {
+                SmallTopAppBar(
+                    title = uiText(feature?.title ?: when (page) { "settings" -> "设置"; "about" -> "关于"; "theme" -> "界面主题"; "credits" -> "致谢"; "licenses" -> "开源许可"; else -> "主页" }),
+                    navigationIcon = {
+                        if (feature != null || secondaryPage) IconButton(onClick = back) {
+                            Icon(MiuixIcons.Basic.ArrowRight, uiText("返回"), Modifier.size(20.dp).graphicsLayer { rotationZ = 180f })
+                        }
+                    },
+                )
+            }
         }, bottomBar = {
-            if (feature == null && !secondaryPage) RootNavigation(page, floatingNavigation, appBlur, backdrop) { page = it }
+            if (feature == null && !secondaryPage) RootNavigation(page, floatingNavigation, liquidNavigation, appBlur, backdrop) { page = it }
         }) { padding ->
+            // Root content continues beneath the floating bar; reserve its height in the
+            // scroll content, not by shortening the viewport and exposing a solid strip.
+            val rootPage = feature == null && !secondaryPage
+            val rootBottom = if (rootPage) padding.calculateBottomPadding() else 0.dp
+            val viewportPadding = if (page == "about") PaddingValues() else if (rootPage) PaddingValues(top = padding.calculateTopPadding()) else padding
             val body = Modifier.fillMaxSize().then(if (appBlur) Modifier.layerBackdrop(backdrop) else Modifier)
-                .padding(padding).consumeWindowInsets(padding)
+                .padding(viewportPadding).consumeWindowInsets(viewportPadding)
             when {
                 feature != null -> pageStates.SaveableStateProvider(feature.name) {
                     FeaturePage(feature, repository, revision, values, ::writeSetting, { editKey = it.key },
@@ -121,12 +140,13 @@ fun LiteApp(
                         onChooseImage, onWallpaperStyle, night, body)
                 }
                 page == "settings" -> SettingsPage(language, onLanguage, { page = "theme" },
-                    onExport, onImport, { resetDialog = true }, body)
-                page == "theme" -> ThemePage(themeMode, onThemeMode, floatingNavigation, onFloatingNavigation, appBlur, onAppBlur, body)
-                page == "about" -> AboutPage({ page = "credits" }, { page = "licenses" }, body)
+                    onExport, onImport, { resetDialog = true }, rootBottom, body)
+                page == "theme" -> ThemePage(themeMode, onThemeMode, floatingNavigation, onFloatingNavigation,
+                    liquidNavigation, onLiquidNavigation, appBlur, onAppBlur, body)
+                page == "about" -> AboutPage({ page = "credits" }, { page = "licenses" }, appBlur, rootBottom, body)
                 page == "credits" -> CreditsPage(body)
                 page == "licenses" -> LicensePage(body)
-                else -> Column(body.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                else -> Column(body.verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = rootBottom + 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Card(Modifier.fillMaxWidth()) {
                         BasicComponent(insideMargin = compactPreferenceMargin, title = uiText(when {
                             repository.syncFailed -> "暂存于本机，待同步"

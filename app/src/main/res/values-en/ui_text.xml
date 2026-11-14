@@ -500,11 +500,11 @@
     <string name="ui_copy_wallpaper_colors_dark">Wallpaper colors · Dark</string>
     <string name="ui_copy_theme_mode">Theme mode</string>
     <string name="ui_copy_floating_navigation_bar">Floating navigation bar</string>
-    <string name="ui_copy_in_app_blur">In-app blur</string>
+    <string name="ui_copy_in_app_blur">Background blur</string>
     <string name="ui_copy_credits">Credits</string>
     <string name="ui_copy_friends">Friends</string>
     <string name="ui_copy_upstream_project_soft_glass_materials_presets_and_selected_system_adap">Upstream project; soft-glass materials, presets, and selected system adapters.</string>
-    <string name="ui_copy_behavioral_reference_for_notification_and_volume_interactions_source_a">Behavioral reference for notification and volume interactions. Source authorization has not been granted; decompiled source and assets are not distributed.</string>
+    <string name="ui_copy_behavioral_reference_for_notification_and_volume_interactions_source_a">Behavioral reference for notification and volume interactions</string>
     <string name="ui_copy_settings_interface_and_theme_components">Settings interface and theme components.</string>
     <string name="ui_copy_module_framework_process_communication_and_hidden_api_access">Module framework, process communication, and hidden API access.</string>
     <string name="ui_copy_app_libraries_and_declarative_ui">App libraries and declarative UI.</string>
@@ -515,4 +515,5 @@
     <string name="ui_copy_check_compatibility">Check compatibility</string>
     <string name="ui_copy_includes_top_banners_enable_lock_screen_notification_material_separate">Includes top banners; enable Lock-screen notification material separately for the lock screen.</string>
     <string name="ui_copy_turn_off_when_another_module_customizes_the_player_background">Turn off when another module customizes the player background.</string>
+    <string name="ui_copy_liquid_glass">Liquid glass</string>
 </resources>

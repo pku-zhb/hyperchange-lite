@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original HC-family artwork for the About page. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0H108V108H0Z" android:fillColor="#EA6500" />
+    <path android:pathData="M37,31H59Q65,31 65,37V59Q65,65 59,65H37Q31,65 31,59V37Q31,31 37,31Z" android:fillColor="#FFFDF9" android:strokeColor="#FFFDF9" android:strokeWidth="3" android:strokeLineJoin="round" android:fillAlpha="0.16" />
+    <path android:pathData="M49,43H71Q77,43 77,49V71Q77,77 71,77H49Q43,77 43,71V49Q43,43 49,43Z" android:fillColor="#FFFDF9" android:strokeColor="#FFFDF9" android:strokeWidth="3" android:strokeLineJoin="round" android:fillAlpha="0.24" />
+    <path android:pathData="M65,29L67.7,35.3L74,38L67.7,40.7L65,47L62.3,40.7L56,38L62.3,35.3Z" android:fillColor="#FFFDF9" />
+</vector>

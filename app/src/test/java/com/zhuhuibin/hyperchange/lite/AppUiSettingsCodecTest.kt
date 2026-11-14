@@ -12,7 +12,7 @@ class AppUiSettingsCodecTest {
 
     @Test fun themeAndLanguageRoundTripWithoutEnteringModuleSettings() {
         for (theme in 0..5) for (language in listOf("system", "zh-CN", "en")) {
-            val saved = AppUiSettings(theme, language, floatingNavigation = true, appBlur = false)
+            val saved = AppUiSettings(theme, language, floatingNavigation = true, appBlur = false, liquidNavigation = true)
             val module = JSONObject().put("volume_thin_width", 9)
             val root = JSONObject().put("settings", module).put("appUi", AppUiSettingsCodec.encode(saved))
             assertEquals(saved, AppUiSettingsCodec.fromBackup(root.toString()))
@@ -29,6 +29,14 @@ class AppUiSettingsCodecTest {
         assertTrue(AppUiSettings(5).isDark(false))
         assertTrue(AppUiSettings(3).isDark(true))
         assertFalse(AppUiSettings(3).isDark(false))
+    }
+
+    @Test fun liquidNavigationRemainsAnAppOnlyBoolean() {
+        val old = """{"appUi":{"version":1,"themeMode":0,"language":"en","floatingNavigation":true,"appBlur":true}}"""
+        assertFalse(requireNotNull(AppUiSettingsCodec.fromBackup(old)).liquidNavigation)
+        assertThrows(IllegalArgumentException::class.java) {
+            AppUiSettingsCodec.fromBackup(old.replace("\"appBlur\":true", "\"appBlur\":true,\"liquidNavigation\":1"))
+        }
     }
 
     @Test fun invalidAppearanceIsRejectedBeforeTheCallerImportsAnySettings() {

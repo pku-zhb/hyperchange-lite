@@ -12,9 +12,8 @@ Selected source and targets were adapted from HyperChanger commit
 notification material selection, widget/sidebar adapters, Control Center radius
 targets and volume long-press behavior.
 
-HyperLight was inspected as behavioral evidence for newly written notification
-and volume effects and local preview interactions. No HyperLight binary, native
-library, decompiled source tree or proprietary preview asset is distributed.
+HyperLight provided a behavioral reference for independently implemented
+notification and volume effects and local preview interactions.
 
 Runtime dependencies retain their own licenses:
 - Miuix: Apache License 2.0
@@ -28,3 +27,14 @@ https://github.com/ColdP/HyperChanger
 https://github.com/compose-miuix-ui/miuix
 https://github.com/libxposed/service
 https://github.com/LSPosed/AndroidHiddenApiBypass
+
+Settings UI adaptations retain their Apache License 2.0 notices:
+- HyperNavBar: About background shaders and app appearance components
+  https://github.com/HyperNavBar/HyperNavBar
+- compose-miuix-ui contributors, Copyright 2026: background and interaction components
+  https://github.com/compose-miuix-ui/miuix
+- Kyant0 / AndroidLiquidGlass: refraction, vibrancy, inner shadows and navigation interactions
+  https://github.com/Kyant0/AndroidLiquidGlass
+- HyperMusicCover and hmc-duo: app UI integration, AGPL-3.0
+  https://github.com/zyl6932/HyperMusicCover
+  https://github.com/pku-zhb/hmc-duo

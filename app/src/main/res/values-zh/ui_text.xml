@@ -500,11 +500,11 @@
     <string name="ui_copy_wallpaper_colors_dark">壁纸取色 · 深色</string>
     <string name="ui_copy_theme_mode">主题模式</string>
     <string name="ui_copy_floating_navigation_bar">浮动导航栏</string>
-    <string name="ui_copy_in_app_blur">应用内模糊</string>
+    <string name="ui_copy_in_app_blur">背景模糊</string>
     <string name="ui_copy_credits">致谢</string>
     <string name="ui_copy_friends">友情链接</string>
     <string name="ui_copy_upstream_project_soft_glass_materials_presets_and_selected_system_adap">项目上游；沿用其柔光材质、预设与部分系统适配</string>
-    <string name="ui_copy_behavioral_reference_for_notification_and_volume_interactions_source_a">通知与音量交互的行为参考；未获源码授权，不分发其反编译源码或资源</string>
+    <string name="ui_copy_behavioral_reference_for_notification_and_volume_interactions_source_a">通知与音量交互的行为参考</string>
     <string name="ui_copy_settings_interface_and_theme_components">设置界面与主题组件</string>
     <string name="ui_copy_module_framework_process_communication_and_hidden_api_access">模块框架、进程通信与隐藏接口适配</string>
     <string name="ui_copy_app_libraries_and_declarative_ui">应用运行库与声明式界面</string>
@@ -515,4 +515,5 @@
     <string name="ui_copy_check_compatibility">注意兼容</string>
     <string name="ui_copy_includes_top_banners_enable_lock_screen_notification_material_separate">含顶部横幅；锁屏需另开“锁屏通知材质”</string>
     <string name="ui_copy_turn_off_when_another_module_customizes_the_player_background">其他模块已自定义播放器背景时关闭</string>
+    <string name="ui_copy_liquid_glass">液态玻璃</string>
 </resources>

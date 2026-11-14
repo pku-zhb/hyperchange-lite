@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package com.zhuhuibin.hyperchange.lite.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -22,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -31,10 +25,11 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.BasicComponent
+import androidx.compose.ui.unit.Dp
+import com.zhuhuibin.hyperchange.lite.ui.component.liquid.IosLiquidGlassNavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -43,8 +38,16 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 
 @Composable
-internal fun RootNavigation(page: String, floating: Boolean, blur: Boolean, backdrop: LayerBackdrop, onPage: (String) -> Unit) {
+internal fun RootNavigation(page: String, floating: Boolean, liquid: Boolean, blur: Boolean, backdrop: LayerBackdrop, onPage: (String) -> Unit) {
     val items = listOf(Triple("home", RootIcons.home, "主页"), Triple("settings", RootIcons.settings, "设置"), Triple("about", RootIcons.info, "关于"))
+    if (floating && liquid) {
+        IosLiquidGlassNavigationBar(
+            items = items.map { (_, icon, title) -> NavigationItem(uiText(title), icon) },
+            selectedIndex = items.indexOfFirst { it.first == page }.coerceAtLeast(0),
+            onItemClick = { onPage(items[it].first) }, backdrop = backdrop, isBlurActive = blur,
+        )
+        return
+    }
     val shape = RoundedCornerShape(if (floating) 32.dp else 0.dp)
     val baseColor = if (floating) MiuixTheme.colorScheme.surfaceContainer else MiuixTheme.colorScheme.surface
     val effect = if (blur) Modifier.textureBlur(backdrop = backdrop, shape = shape,
@@ -100,11 +103,11 @@ private object RootIcons {
 @Composable
 internal fun SettingsPage(
     language: String, onLanguage: (String) -> Unit, onTheme: () -> Unit,
-    onExport: () -> Unit, onImport: () -> Unit, onReset: () -> Unit, modifier: Modifier,
+    onExport: () -> Unit, onImport: () -> Unit, onReset: () -> Unit, bottomPadding: Dp, modifier: Modifier,
 ) {
     val languageNames = listOf(uiText("跟随系统"), uiText("简体中文"), uiText("English"))
     val languages = listOf("system", "zh-CN", "en")
-    Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp),
+    Column(modifier.verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding + 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Card(Modifier.fillMaxWidth()) {
             ArrowPreference(uiText("界面主题"), insideMargin = compactPreferenceMargin, onClick = onTheme)
@@ -116,37 +119,6 @@ internal fun SettingsPage(
             ArrowPreference(uiText("导出全部设置"), summary = uiText("保存所有参数、开关和应用界面设置为 JSON 文件"), insideMargin = compactPreferenceMargin, onClick = onExport)
             ArrowPreference(uiText("从文件恢复设置"), summary = uiText("用文件中的设置覆盖对应项目"), insideMargin = compactPreferenceMargin, onClick = onImport)
             ArrowPreference(uiText("恢复全部默认"), summary = uiText("所有功能开关与参数恢复默认值"), insideMargin = compactPreferenceMargin, onClick = onReset)
-        }
-    }
-}
-
-@Composable
-internal fun AboutPage(onCredits: () -> Unit, onLicenses: () -> Unit, modifier: Modifier) {
-    val context = LocalContext.current
-    val links = LocalUriHandler.current
-    val version = remember(context) {
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }.getOrDefault("")
-    }
-    Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Image(painterResource(com.zhuhuibin.hyperchange.lite.R.drawable.hc_launcher_foreground), null, Modifier.size(88.dp))
-            Text("hc-lite", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text(version, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        }
-        Card(Modifier.fillMaxWidth()) {
-            DonationEntry()
-            ArrowPreference(uiText("源代码"), insideMargin = compactPreferenceMargin,
-                onClick = { links.openUri("https://github.com/pku-zhb/hc-lite") })
-            ArrowPreference(uiText("问题反馈"), insideMargin = compactPreferenceMargin,
-                onClick = { links.openUri("https://github.com/pku-zhb/hc-lite/issues") })
-            ArrowPreference(uiText("致谢"), insideMargin = compactPreferenceMargin, onClick = onCredits)
-            ArrowPreference(uiText("开源许可"), insideMargin = compactPreferenceMargin, onClick = onLicenses)
-        }
-        Card(Modifier.fillMaxWidth()) {
-            ArrowPreference(title = "hmc-duo", summary = uiText("友情链接"), insideMargin = compactPreferenceMargin,
-                onClick = { links.openUri("https://github.com/pku-zhb/hmc-duo") })
         }
     }
 }

@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.isNavigationBarContrastEnforced = false
         repository = SettingsRepository(this)
         stopAppUiObservation = AppUiPreferences.observe(applicationContext) {
             runOnUiThread { if (!isDestroyed) appUi = AppUiPreferences.load(this) }
@@ -94,6 +95,7 @@ class MainActivity : ComponentActivity() {
                 repository = repository, revision = revision,
                 themeMode = appUi.themeMode, language = appUi.language,
                 floatingNavigation = appUi.floatingNavigation, appBlur = appUi.appBlur,
+                liquidNavigation = appUi.liquidNavigation,
                 onFloatingNavigation = { enabled ->
                     AppUiPreferences.saveNavigation(this, enabled)
                     appUi = appUi.copy(floatingNavigation = enabled)
@@ -101,6 +103,10 @@ class MainActivity : ComponentActivity() {
                 onAppBlur = { enabled ->
                     AppUiPreferences.saveAppBlur(this, enabled)
                     appUi = appUi.copy(appBlur = enabled)
+                },
+                onLiquidNavigation = { enabled ->
+                    AppUiPreferences.saveLiquidNavigation(this, enabled)
+                    appUi = appUi.copy(liquidNavigation = enabled)
                 },
                 onThemeMode = { mode ->
                     AppUiPreferences.saveTheme(this, mode)

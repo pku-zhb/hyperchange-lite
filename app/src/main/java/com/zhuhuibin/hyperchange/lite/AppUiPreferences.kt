@@ -11,6 +11,7 @@ import org.json.JSONObject
 data class AppUiSettings(
     val themeMode: Int = 0, val language: String = "system",
     val floatingNavigation: Boolean = false, val appBlur: Boolean = true,
+    val liquidNavigation: Boolean = false,
 ) {
     fun isDark(systemDark: Boolean): Boolean = when (themeMode) {
         1, 4 -> false
@@ -27,7 +28,7 @@ object AppUiPreferences {
     fun observe(context: Context, changed: () -> Unit): () -> Unit {
         val preferences = context.getSharedPreferences(GROUP, Context.MODE_PRIVATE)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == "theme_mode" || key == "language" || key == "floating_navigation" || key == "app_blur") changed()
+            if (key == null || key == "theme_mode" || key == "language" || key == "floating_navigation" || key == "app_blur" || key == "liquid_navigation") changed()
         }
         preferences.registerOnSharedPreferenceChangeListener(listener)
         return { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -47,7 +48,8 @@ object AppUiPreferences {
         }
         return AppUiSettings(theme, language,
             runCatching { prefs.getBoolean("floating_navigation", false) }.getOrDefault(false),
-            runCatching { prefs.getBoolean("app_blur", true) }.getOrDefault(true))
+            runCatching { prefs.getBoolean("app_blur", true) }.getOrDefault(true),
+            runCatching { prefs.getBoolean("liquid_navigation", false) }.getOrDefault(false))
     }
 
     fun saveTheme(context: Context, mode: Int) {
@@ -63,6 +65,10 @@ object AppUiPreferences {
         context.getSharedPreferences(GROUP, Context.MODE_PRIVATE).edit().putBoolean("app_blur", enabled).apply()
     }
 
+    fun saveLiquidNavigation(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(GROUP, Context.MODE_PRIVATE).edit().putBoolean("liquid_navigation", enabled).apply()
+    }
+
     fun saveLanguage(context: Context, language: String) {
         require(language in languages)
         val locales = LocaleList.forLanguageTags(if (language == "system") "" else language)
@@ -75,6 +81,7 @@ object AppUiPreferences {
         saveTheme(context, settings.themeMode)
         saveNavigation(context, settings.floatingNavigation)
         saveAppBlur(context, settings.appBlur)
+        saveLiquidNavigation(context, settings.liquidNavigation)
         saveLanguage(context, settings.language)
     }
 }
@@ -84,6 +91,7 @@ internal object AppUiSettingsCodec {
     fun encode(settings: AppUiSettings): JSONObject = JSONObject()
         .put("version", 1).put("themeMode", settings.themeMode).put("language", settings.language)
         .put("floatingNavigation", settings.floatingNavigation).put("appBlur", settings.appBlur)
+        .put("liquidNavigation", settings.liquidNavigation)
 
     fun fromBackup(text: String): AppUiSettings? {
         val root = JSONObject(text)
@@ -103,6 +111,7 @@ internal object AppUiSettingsCodec {
             return setting
         }
         return AppUiSettings(rawTheme.toInt(), language,
-            optionalBoolean("floatingNavigation", false), optionalBoolean("appBlur", true))
+            optionalBoolean("floatingNavigation", false), optionalBoolean("appBlur", true),
+            optionalBoolean("liquidNavigation", false))
     }
 }
