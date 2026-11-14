@@ -20,6 +20,10 @@ internal data class NotificationScene(
 }
 
 internal object NotificationScopePolicy {
+    /** Media has separate permission, but its OEM recipe still changes with keyguard/AOD. */
+    fun materialGeneration(role: NotificationRole, sceneGeneration: Long): Long =
+        if (role == NotificationRole.HEADS_UP) 0L else sceneGeneration
+
     fun allows(role: NotificationRole, lockscreenEffects: Boolean, scene: NotificationScene): Boolean =
         role != NotificationRole.ORDINARY || lockscreenEffects || scene.confirmedUnlocked
 

@@ -81,4 +81,14 @@ class NotificationScopePolicyTest {
         // A different row's role counter and ordinary scene epoch do not enter this token.
         assertTrue(queued.isCurrent(0, NotificationRole.HEADS_UP, 4))
     }
+
+    @Test fun mediaMaterialRefreshExpiresWhenTheNativeKeyguardOrAodRecipeChanges() {
+        val role = NotificationRole.MEDIA
+        val queued = NotificationScopeToken(NotificationScopePolicy.materialGeneration(role, 5), role)
+        assertTrue(queued.isCurrent(NotificationScopePolicy.materialGeneration(role, 5), role))
+        assertFalse(queued.isCurrent(NotificationScopePolicy.materialGeneration(role, 6), role))
+        // A return from AOD to the same visual keyguard is still a new native selection.
+        assertFalse(queued.isCurrent(NotificationScopePolicy.materialGeneration(role, 7), role))
+        assertEquals(0L, NotificationScopePolicy.materialGeneration(NotificationRole.HEADS_UP, 7))
+    }
 }

@@ -91,7 +91,8 @@ internal object NotificationScope {
     private fun token(view: View, role: NotificationRole, ordinaryScene: Boolean): NotificationScopeToken {
         val row = GlassSurfaces.row(view) ?: view
         val roleGeneration = synchronized(roleGenerations) { roleGenerations[row] ?: 0L }
-        return NotificationScopeToken(if (ordinaryScene && role == NotificationRole.ORDINARY) sceneGeneration else 0L, role, roleGeneration)
+        return NotificationScopeToken(if (ordinaryScene)
+            NotificationScopePolicy.materialGeneration(role, sceneGeneration) else 0L, role, roleGeneration)
     }
     fun isCurrent(view: View, token: NotificationScopeToken, ordinaryScene: Boolean = true): Boolean = token == token(view, ordinaryScene)
 
