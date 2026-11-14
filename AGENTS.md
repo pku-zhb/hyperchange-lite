@@ -60,7 +60,7 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
   the full source commit. Preserve historical artifact names and receipts.
   Use `(major * 10000 + minor * 100 + patch) * 1000` for stable versionCode values.
 - Keep machine receipts and checksums in the project. The personal archive contains
-  installable APKs and short Chinese acceptance notes, not raw logs or phone dumps.
+  installable APKs only, not acceptance notes, raw logs or phone dumps.
 - End every development round with a concise Chinese report. For bug fixes, explain
   the symptom, confirmed cause (or explicitly labeled hypothesis), and remedy. For
   new or changed behavior, give 1-3 concrete test actions and expected results. Test
@@ -112,5 +112,16 @@ in the ignored local archive, with the suspected MiDuo Noti interaction recorded
 
 Archive APKs locally and copy to the reachable phone Download directory. Do not
 send APK attachments through cc-connect. Do not create Markdown notes in the
-personal Miduo archive; put requested reading/acceptance documents in 00 Temp.
+personal Miduo archive; keep acceptance work in the single rolling document below.
 Phone installation and scope reload require current explicit owner authorization.
+
+## Single rolling acceptance document
+
+Maintain all future acceptance work in the one existing document:
+`~/Harbor Drive/00 Temp/2026-11-14 - hc-lite 0.1.7 与 hmc-duo 0.2.6 本轮验收.md`.
+Update that same file in place, keeping the current pending checks, confirmed
+results and installation state together. Keep using this exact path across future
+versions; do not create per-version acceptance files or parallel checklists.
+Do not recreate older acceptance documents that the owner has deleted. Do not
+write Markdown into the personal Miduo APK archive. This documentation rule does
+not authorize phone changes, installations or scope reloads.
