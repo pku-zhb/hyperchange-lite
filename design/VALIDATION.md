@@ -1,5 +1,48 @@
 # Host validation
 
+## 0.1.8 native fill boundary, lockscreen material identity and App polish
+
+- The complete JVM suite passes 308 tests in 53 suites with no failures, errors
+  or skips. Debug lint, Debug assembly and `git diff --check` pass. Builds use
+  `tools/build.sh` with `LITE_GRADLE_MAX_WORKERS=2`; outputs stay in Harbor
+  DevCache. Existing non-blocking platform warnings remain.
+- Slider track customization no longer overwrites native progress clipping or
+  the secondary volume progress getter. Tests cover flat-boundary ownership,
+  independent native restoration and fresh resource/qualifier values. The
+  previous version incorrectly applied one configured radius to both channels.
+- The retained native material binder uses `headUpState` and
+  `hasCalledHUNDragDownDisappear`, whereas the display getter also includes an
+  old disappearance-animation flag. New tests exercise an animation flag that
+  stays true after both native material flows become false, live changes to
+  either flow, unsupported metadata and a transient read failure. Material now
+  uses native identity while animation retains its own display classification.
+- Media material carries scene epochs, so a native AOD deferral is not treated
+  as a completed refresh after waking. Existing collectors are reused, without
+  another `bind()` or a forced ordinary keyguard recipe during AOD. Material and
+  default-off animation permissions, current native ownership and cleanup
+  remain separate. See [the complete trace](LOCKSCREEN_SCOPES.md).
+- The optional `hc-lite-material` SystemUIService dump reports only observed
+  scope flags, binder/refresh status and material-setter counts. It changes no
+  settings, publishes no scene and triggers no material refresh. A selector
+  return or a changed View argument is not asserted as a successful GPU commit.
+- App appearance/backup coverage includes the compatible liquid-navigation
+  field and the existing theme/language/navigation/blur data. The About page
+  has a collapsing animated colored header; the floating navigation removes
+  the extra opaque container and supports its selected liquid/blur effect.
+  Behavioural credits remain distinct from intact required licence notices.
+- Read-only prior phone preferences/module logs confirmed enabled ranges and
+  installed SystemUI material hooks. They do not prove visual acceptance or
+  establish every affected row's runtime state. This delivery performs no
+  phone access, installation, scope reload, settings mutation, GUI operation,
+  screenshot or reboot. The next owner check covers actual lockscreen material,
+  slider fill edges and App appearance.
+- The versioned Debug APK is built from clean committed/pushed source and
+  verified against its embedded source revision, existing certificate and
+  archive hashes. Formal production signing remains unconfigured. Package,
+  preference group, existing saved controls and app data are not reset.
+- Pull-down backdrop zoom remains unimplemented; no unrelated whole-background
+  behavior or suspended notification grouping is restored.
+
 ## 0.1.7 lockscreen scope, slider corners and App appearance
 
 - The full JVM suite passes 302 tests in 52 suites with no failures/errors/skips;

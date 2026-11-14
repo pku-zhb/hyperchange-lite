@@ -4,6 +4,22 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.8 restores the native flat brightness/volume fill boundary while
+keeping the enclosing track corners adjustable. Lockscreen notification material
+now follows the native binder's live heads-up flows rather than a lingering
+disappearance-animation flag; media material also refreshes after keyguard/AOD
+scene changes. Material and default-off animation permissions remain separate.
+An explicit read-only material dump distinguishes scope, binder and setter
+results. The App restores a collapsing animated About header, colored artwork
+and text, liquid navigation and floating-background blur without a second
+opaque navigation layer. Existing settings and backup compatibility are retained.
+See [lockscreen material tracing](design/LOCKSCREEN_SCOPES.md),
+[slider corners](design/CONTROL_SLIDER_RADIUS.md) and
+[host validation](design/VALIDATION.md). The existing Debug signing identity is
+retained; formal production signing is not configured. Phone appearance and
+transition behavior remain owner acceptance; this delivery does not install or
+reload any phone scope.
+
 Version 0.1.7 separates lockscreen notification material from default-off
 lockscreen animations. Plain native lockscreen rows can acquire their current
 keyguard glass recipe; settled screen/wake state and current native ownership
