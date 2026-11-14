@@ -1,5 +1,50 @@
 # Host validation
 
+## 0.1.9 ordinary lockscreen material and native-busy recovery
+
+- The complete JVM suite passes 314 tests in 54 suites with no failures, errors
+  or skips. Debug lint, Debug assembly and `git diff --check` pass. Delivery uses
+  `tools/build.sh` with `LITE_GRADLE_MAX_WORKERS=2`; caches, build outputs and
+  diagnostic logs remain in Harbor DevCache. The final versioned package is
+  rebuilt with `clean` from committed, pushed source. Existing non-blocking
+  platform/Gradle warnings remain.
+- The native full-AOD listener refreshes notification/media style before clearing
+  its busy flag, and cancellation clears the flag without publishing a scene.
+  A material refresh refused during that interval previously lost its remaining
+  trigger. Four new tests cover weak owner-bound deferral, deduplication, one-time
+  consumption, replacement ownership and clearing a completed request. Only
+  actually refused attached roots still bound to the completing controller enter
+  the existing current-scene queue. There is no polling, new collector, native
+  flag mutation or replay of a captured effect.
+- Ordinary rows previously retained the native keyguard base recipe even when
+  unification normalized media/live cards. Its untouched base slots materially
+  differ from the normal recipe, so a changed setter did not imply player parity.
+  Two new tests cover the ordinary/unify/range/scene/heads-up matrix and disabled
+  or unknown-keyguard behavior. The settled lit ordinary path now resolves the
+  normal recipe and blends from the current native `getFixUiModeContext` only
+  after both scope and exact native-row keyguard/nonbusy state permit it.
+- Full normal-effect replay remains limited to the existing media/focus path.
+  Ordinary rows retain their current native keyguard lifecycle and AOD effect;
+  unification off, heads-up, unknown/AOD/native-busy states retain their existing
+  base selection. Material and default-off animation permissions remain separate.
+  Pinned clock/navigation/unlock/lyric/sampling flicker issues are not adjusted.
+- The explicit read-only dump now separates ORDINARY, MEDIA and HEADS_UP glass
+  setter calls, changed arguments and denials, reads the last native row effect
+  only on demand, and counts successful ordinary normal-base selections. It
+  includes no notification text, IDs or credentials. Setter changes, selector
+  return and an admitted media event are not GPU or visual acceptance.
+- Prior read-only phone evidence supplied during diagnosis confirmed settled
+  lit keyguard, allowed ordinary material and a returned native selector, rather
+  than relying on media success to infer ordinary success. The packaging task
+  itself does not access or change the phone. The coordinating root agent owns
+  subsequent archived installation, related scope reload and device tests under
+  the owner's standing authorization; no whole-phone reboot is permitted.
+- The archive workflow verifies the existing signing certificate, package/version,
+  clean pushed source against the embedded revision, and equal retained/personal
+  APK SHA-256 hashes. Formal production signing remains unconfigured. Personal
+  archive output is APK-only; receipts and machine evidence stay in the project
+  or DevCache. No settings/data reset or previous APK cleanup is part of this build.
+
 ## 0.1.8 native fill boundary, lockscreen material identity and App polish
 
 - The complete JVM suite passes 308 tests in 53 suites with no failures, errors

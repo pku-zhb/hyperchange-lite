@@ -4,6 +4,19 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.9 restores ordinary lockscreen material after the native AOD
+controller finishes a previously refused refresh. With material unification
+enabled, settled lit lockscreen notifications now use the normal base recipe
+from their current native day/night context, alongside media and live cards.
+The native ordinary-row effect still owns its lifecycle and AOD selection;
+material permission does not grant animation permission. Read-only diagnostics
+separate ordinary, media and heads-up setter results and expose the latest
+native row effect. The full host suite passes 314 tests, Debug lint and assembly.
+See [lockscreen material tracing](design/LOCKSCREEN_SCOPES.md) and
+[host validation](design/VALIDATION.md). Native appearance, actual parameter
+response and scope reload behavior still require device acceptance. Existing
+package, signing identity, saved settings and backup compatibility are retained.
+
 Version 0.1.8 restores the native flat brightness/volume fill boundary while
 keeping the enclosing track corners adjustable. Lockscreen notification material
 now follows the native binder's live heads-up flows rather than a lingering

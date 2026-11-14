@@ -18,8 +18,8 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
   consumer, validation, reset and export/import coverage.
 - Use `tools/build.sh` for builds. All caches and outputs belong on mounted Harbor
   DevCache. Never create the volume mount locally.
-- No phone installation, settings mutation or process restart is authorized by source
-  work. Never reboot the phone. Separate host verification from device acceptance.
+- Source work alone does not establish device acceptance. Follow the standing
+  phone authorization below, and never reboot the phone.
 - Keep phone identifiers, logs, snapshots and investigation artifacts outside the repo
   and synced Drive. Store reusable implementation notes in `design/` in English.
 - Commit coherent milestones with imperative conventional subjects and push to this
@@ -48,8 +48,8 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
 - Global class-loading callbacks must keep their Java-only, callback-entry guard and
   defer adapter installation; see `design/STARTUP_SAFETY.md`. Preserve the upstream's
   critical startup ordering when pruning features instead of rewriting it casually.
-  Keep raw ANR evidence out of commits. Do not leave LSPosed safe mode or reload scopes
-  while startup acceptance remains pending without the owner's explicit instruction.
+  Keep raw ANR evidence out of commits. Preserve startup guards during scope
+  reloads and follow the standing phone authorization below.
 - Before delivering each APK version, run `tools/archive-apk.py`. Retain the signed
   versioned APK under `releases/local/` and copy it to the owner's existing
   `~/Harbor Drive/02 Personal Files/Miduo/` archive. Verify equal SHA-256 hashes and
@@ -66,18 +66,19 @@ preference group and `hyperchange-lite` JSON format for upgrade compatibility.
   new or changed behavior, give 1-3 concrete test actions and expected results. Test
   only this round's changes unless a specific regression justifies repeating a check.
   If no app code changed, say so rather than generating a duplicate app version.
-- Current phone authorization permits ordinary replacement installation after the
-  versioned APK is archived. Install the retained APK with normal `adb install -r`;
-  verify the installed package/version and report success or the exact blocker.
-  Do not downgrade, uninstall, clear data or use a staged/reboot-dependent install.
-  Do not restart any scope or other process, change device/module settings, reboot,
-  operate the GUI, or capture screenshots. All other phone access remains read-only.
-  Tell the user that existing scope processes may still run the previous hooks until
-  they choose to reload them. Later explicit user instructions can change this boundary.
-- If the owner takes over installation, copy the verified APK to `/sdcard/Download/`
-  and stop installation retries for that delivery. This handoff is currently active
-  for `0.1.0-preview1`; its ADB installation was rejected by the phone's installer.
-  Verify the downloaded file hash without opening the file manager or installer UI.
+- The owner grants standing phone authorization to the coordinating root agent:
+  replace-install already archived APKs with standard `adb install -r`, reload
+  related scopes, save and restore necessary test parameters, and perform normal
+  background tests or a small amount of GUI interaction when needed. Verify the
+  installed package/version after installation. Do not downgrade, uninstall,
+  clear data, use staged/reboot-dependent installation, or reboot the phone.
+  Avoid screenshots wherever possible; the main conversation should avoid viewing
+  GUI screenshots. Ask the owner only for required personal authentication or
+  repeated visual acceptance that cannot be established from background state.
+  This authorization persists until the owner explicitly revokes it; do not ask
+  again before each ordinary authorized installation, scope reload or test.
+  Subagents coordinate all device operations through the root agent rather than
+  accessing the phone concurrently.
 
 New APK filenames use the short project name and ordinary X.Y.Z version, without preview labels or source IDs. Keep source identity inside the APK and local receipts. Preserve historical APKs and names.
 
@@ -113,7 +114,8 @@ in the ignored local archive, with the suspected MiDuo Noti interaction recorded
 Archive APKs locally and copy to the reachable phone Download directory. Do not
 send APK attachments through cc-connect. Do not create Markdown notes in the
 personal Miduo archive; keep acceptance work in the single rolling document below.
-Phone installation and scope reload require current explicit owner authorization.
+Use the standing phone authorization above for installation, related scope
+reloads and tests; an explicit owner revocation changes that boundary.
 
 ## Single rolling acceptance document
 
@@ -123,5 +125,5 @@ Update that same file in place, keeping the current pending checks, confirmed
 results and installation state together. Keep using this exact path across future
 versions; do not create per-version acceptance files or parallel checklists.
 Do not recreate older acceptance documents that the owner has deleted. Do not
-write Markdown into the personal Miduo APK archive. This documentation rule does
-not authorize phone changes, installations or scope reloads.
+write Markdown into the personal Miduo APK archive. This documentation rule adds
+no device privileges beyond the standing phone authorization above.
