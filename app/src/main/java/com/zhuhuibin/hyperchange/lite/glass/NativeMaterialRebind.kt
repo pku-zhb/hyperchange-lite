@@ -9,7 +9,8 @@ import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /** Re-enter the current OEM state selector, not the previous effect's apply method. */
-internal class NativeMaterialRebind(private val runtime: HookRuntime) {
+internal class NativeMaterialRebind(private val runtime: HookRuntime,
+                                    private val onSettled: (List<View>) -> Unit = {}) {
     private class RowBinding(val method: Method, val args: Array<Any?>)
     private val rows = WeakHashMap<View, RowBinding>()
     private val mediaInteractors = WeakHashMap<View, WeakReference<Any>>()
@@ -19,9 +20,12 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
     private var rowSelections = 0L
     private var mediaBindings = 0L
     private var lastRefresh = "none"
+    private val deferred = DeferredMaterialRoots<View, Any>()
+    private var transitionRetries = 0L
 
     fun diagnostics(): String = "rowBindings=${synchronized(rows) { rows.size }} rowSelections=$rowSelections " +
-        "mediaBindings=$mediaBindings mediaRoots=${synchronized(mediaInteractors) { mediaInteractors.size }} lastRefresh=$lastRefresh"
+        "mediaBindings=$mediaBindings mediaRoots=${synchronized(mediaInteractors) { mediaInteractors.size }} lastRefresh=$lastRefresh " +
+        "deferredRoots=${deferred.size()} transitionRetries=$transitionRetries"
 
     fun selecting(view: View): Boolean = selecting.get() === view
 
@@ -74,6 +78,33 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
                 chain.proceed()
             }
         }.onFailure { runtime.log("Current media material selector unavailable", it) }
+        runCatching {
+            val listener = loader.loadClass("com.android.systemui.statusbar.notification.fullaod.NotifiFullAodController\$FullAodTransitionListener")
+            listener.declaredMethods.filter { it.name in setOf("onComplete", "onCancel") && it.parameterCount == 1 }
+                .forEach { method ->
+                    runtime.hook(method, "lite-material:settled:${method.name}") { chain ->
+                        val result = chain.proceed()
+                        val owner = chain.thisObject?.let { field(it, "this\$0") }
+                        if (owner != null) {
+                            val ready = deferred.take(owner, field(owner, "mWillDoAodAnim") == false)
+                                .filter { root -> root.isAttachedToWindow && boundTo(root, owner) }
+                            if (ready.isNotEmpty()) {
+                                transitionRetries += ready.size
+                                // Queue through the existing current-scene path after all native
+                                // completion hooks return; do not replay a captured effect here.
+                                onSettled(ready)
+                            }
+                        }
+                        result
+                    }
+                }
+        }.onFailure { runtime.log("Native material transition completion unavailable", it) }
+    }
+
+    private fun boundTo(view: View, owner: Any): Boolean {
+        val interactor = if (GlassSurfaces.media(view)) synchronized(mediaInteractors) { mediaInteractors[view]?.get() }
+            else synchronized(rows) { rows[view] }?.args?.getOrNull(0)
+        return interactor?.let { field(it, "notifiFullAodController") } === owner
     }
 
     fun root(view: View): View? = if (GlassSurfaces.media(view)) GlassSurfaces.materialRoot(view) else GlassSurfaces.row(view)
@@ -103,7 +134,12 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
         val interactor = binding.args.getOrNull(0) ?: return false
         // The native selector intentionally does no material work during this transition.
         val aod = field(interactor, "notifiFullAodController") ?: return false
-        if (field(aod, "mWillDoAodAnim") != false) { lastRefresh = "row-aod-transition"; return false }
+        val busy = field(aod, "mWillDoAodAnim")
+        if (busy != false) {
+            if (busy == true) deferred.blocked(view, aod)
+            lastRefresh = "row-aod-transition"; return false
+        }
+        deferred.clear(view)
         refreshing.set(true)
         return try {
             // Target ROM's four-argument binder always selects/applies current flows.
@@ -123,7 +159,12 @@ internal class NativeMaterialRebind(private val runtime: HookRuntime) {
         val aod = field(interactor, "notifiFullAodController") ?: return false
         // The native collector deliberately suppresses material writes during this
         // transition. Do not claim a rebind or replay an older effect through it.
-        if (field(aod, "mWillDoAodAnim") != false) { lastRefresh = "media-aod-transition"; return false }
+        val busy = field(aod, "mWillDoAodAnim")
+        if (busy != false) {
+            if (busy == true) deferred.blocked(view, aod)
+            lastRefresh = "media-aod-transition"; return false
+        }
+        deferred.clear(view)
         refreshing.set(true)
         return try {
             val injector = view.javaClass.getMethod("getInjector").invoke(view) ?: return false

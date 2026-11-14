@@ -132,3 +132,27 @@ dump does not publish a new scene, request a refresh or change settings.
 This distinguishes a denied scope or missed binder from a card that did receive
 changed glass values. HMC capsule relay capture/application remains a separate
 downstream result; Lite's enabled App switches alone prove neither result.
+
+## Finishing a native-busy material request
+
+The retained full-AOD listener calls `updateNotificationStyle`,
+`updateMediaNotificationStyle` and `finishForMediaNotificationAnim` before it
+clears `mWillDoAodAnim`. Its cancellation also clears that flag without publishing
+a new keyguard/status-bar state. A settled awake scope can therefore issue its
+one material refresh while the native selector still refuses work. Previously
+that refusal released the deduplication claim, but the root had already been
+stamped with the current scene, and no later signal requested it again. A live
+read-only sample showed settled lit keyguard alongside `lastRefresh=row-aod-transition`.
+
+Only roots actually refused for that native busy flag now keep a weak reference
+to its transition controller. After the same controller's native completion or
+cancellation returns with the flag false, attached roots still bound to that
+controller enter the existing current-scene queue once. A request for another
+controller cannot consume them. A successful ordinary refresh clears its pending
+retry; a newer controller replaces the old identity. Configuration, scope and
+role guards are re-evaluated by the normal queue, including guarded releases of
+disabled material ranges. Unknown native state does not create a retry.
+
+This does not poll, create a new collector, write native transition flags,
+replay a cached recipe or tune clock/lyrics/position animations. Deferred-root
+and completion-retry counters are included in the existing read-only dump.

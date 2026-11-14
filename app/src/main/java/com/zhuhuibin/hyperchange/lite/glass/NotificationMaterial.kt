@@ -39,7 +39,13 @@ internal class NotificationMaterial(
     private val refreshedRoots = NativeMaterialRefreshes<View, NotificationScopeToken>()
     private val releases = MaterialReleaseLedger<View>()
     private val generation = MaterialGeneration()
-    private val native = NativeMaterialRebind(runtime)
+    private val native = NativeMaterialRebind(runtime) { roots ->
+        roots.filter(::active).forEach { requestRefresh(it, false) }
+        // A disabled range can still owe a native handoff. Keep its original
+        // ownership guard rather than treating a failed AOD call as a release.
+        val ready = roots.toSet()
+        releases.snapshot().filterKeys(ready::contains).forEach { (root, guard) -> scheduleRelease(root, guard) }
+    }
     private val effectPrefix = "com.android.systemui.statusbar.notification.style.vieweffect."
     private val installedLoaders = WeakHashMap<ClassLoader, Boolean>()
     private var firstFailureLogged = false
