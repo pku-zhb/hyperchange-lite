@@ -4,6 +4,15 @@ A focused fork of [HyperChanger](https://github.com/ColdP/HyperChanger), maintai
 at [pku-zhb/hc-lite](https://github.com/pku-zhb/hc-lite). Package:
 `com.zhuhuibin.hyperchange.lite`.
 
+Version 0.1.10 adds the default-off **横幅通知可读性优化（实验性功能）** switch.
+It requests brief, bounded native compositor brightness samples behind the
+visible banner and adapts standard title/body text with separate roles and
+hysteresis. The banner's own surface is excluded; there are no screenshots,
+retained pixels or permanent sampling timer. Native colors, spans and shadows
+are restored on exit. Unknown sampling/material contracts retain native text
+colors with a small contrast shadow. See [implementation and limits](design/BANNER_READABILITY.md)
+and [validation](design/VALIDATION.md). Material and animation settings remain independent.
+
 Version 0.1.9 restores ordinary lockscreen material after the native AOD
 controller finishes a previously refused refresh. With material unification
 enabled, settled lit lockscreen notifications now use the normal base recipe

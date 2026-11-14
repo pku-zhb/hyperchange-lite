@@ -1,5 +1,25 @@
 # Host validation
 
+## 0.1.10 experimental banner text readability
+
+- The complete JVM suite passes 324 tests in 56 suites, without failures,
+  errors or skips; Debug lint and `git diff --check` pass. The delivery package
+  is assembled separately from clean committed, pushed source with the retained
+  signing identity. These host results do not establish live sampling or visuals.
+- New tests cover the exact default-off setting, partial imports, reset and
+  round-trip persistence, sampling budgets, native-only text admission, separate
+  primary/secondary colors, hysteresis, cancellation and owned-value restoration.
+  The targeted run passes 64 tests with main Kotlin/Java compilation.
+- The implementation uses the retained firmware's native compositor helper with
+  a required valid stop surface. Sampling is event-driven, bounded to 192 x 48
+  pixels for 250 ms, with at least 750 ms between bursts and no idle heartbeat.
+- The native helper's live callback, standard RemoteViews span rendering and
+  perceived contrast require device verification. Scalar underlay brightness is
+  not a measured final glass contrast ratio. Unknown/opaque materials or
+  unavailable APIs keep native ink and use only a small reversible shadow.
+- The read-only `hc-lite-banner` dump is independent of `hc-lite-material`.
+  No notification text, bitmap, App identity or credential is recorded.
+
 ## 0.1.9 ordinary lockscreen material and native-busy recovery
 
 - The complete JVM suite passes 314 tests in 54 suites with no failures, errors
